@@ -1,0 +1,4 @@
+{
+    "appService.defaultWebAppToDeploy": "/subscriptions/88615200-a2ec-46f4-926b-17e78b91c773/resourceGroups/appsvc_linux_uksouth/providers/Microsoft.Web/sites/football-tracker",
+    "appService.deploySubpath": "."
+}
