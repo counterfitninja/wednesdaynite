@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Games - Football Tracker{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Recent Games</h1>
+    <a href="/games/add" class="btn btn-success">➕ Add New Game</a>
+</div>
+
+{% if games %}
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Location</th>
+                <th>Players</th>
+                <th>Notes</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for game in games %}
+            <tr>
+                <td><strong>{{ game.date }}</strong></td>
+                <td>{{ game.location or 'N/A' }}</td>
+                <td><span class="badge badge-success">{{ game.players_count }} playing</span></td>
+                <td>{{ game.notes[:50] if game.notes else '' }}{{ '...' if game.notes and game.notes|length > 50 else '' }}</td>
+                <td>
+                    <a href="/games/{{ game.id }}" class="btn">View Details</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card">
+    <p>No games recorded yet. <a href="/games/add">Add your first game</a>!</p>
+</div>
+{% endif %}
+{% endblock %}

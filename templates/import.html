@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Import CSV - Football Tracker{% endblock %}
+
+{% block content %}
+<h1>Import WhatsApp Poll Data</h1>
+
+{% if success %}
+<div class="alert alert-success">{{ success }}</div>
+{% endif %}
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<div class="card">
+    <h2>Upload CSV File</h2>
+    <p>Import attendance data from your WhatsApp poll results.</p>
+    
+    <form method="POST" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="file">CSV File *</label>
+            <input type="file" id="file" name="file" accept=".csv" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="date">Game Date *</label>
+            <input type="date" id="date" name="date" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="location">Location</label>
+            <input type="text" id="location" name="location" placeholder="e.g., City Park">
+        </div>
+        
+        <button type="submit" class="btn btn-success">Import</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>CSV Format</h2>
+    <p>Your CSV file should have these columns:</p>
+    <pre style="background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto;">Player Name,Status
+John Smith,Yes
+Jane Doe,No
+Mike Johnson,Yes
+Sarah Williams,Maybe</pre>
+    
+    <p style="margin-top: 15px;"><strong>Status values:</strong></p>
+    <ul>
+        <li><strong>Yes</strong>, ✓, ✅, Playing, In → Playing</li>
+        <li><strong>No</strong>, ✗, ❌, Not Playing, Out → Not Playing</li>
+        <li><strong>Maybe</strong>, ?, ❓ → Maybe</li>
+    </ul>
+</div>
+{% endblock %}

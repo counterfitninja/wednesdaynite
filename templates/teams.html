@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Team Generator - Football Tracker{% endblock %}
+
+{% block content %}
+<a href="/games/{{ game.id }}" class="btn" style="margin-bottom: 20px;">← Back to Game</a>
+
+<div class="card">
+    <h1>Balanced Teams for {{ game.date }}</h1>
+    <p><strong>Location:</strong> {{ game.location or 'N/A' }}</p>
+</div>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% else %}
+
+<div class="grid" style="grid-template-columns: repeat(2, 1fr);">
+    <div class="card">
+        <h2 style="color: #3498db;">🔵 Team 1</h2>
+        <div class="stat">
+            <div class="stat-value" style="font-size: 1.5em;">{{ team1|length }} players</div>
+            <div class="stat-label">Total Skill: {{ team1_skill }} • Avg: {{ "%.1f"|format(team1_avg) }}</div>
+        </div>
+        <ul style="list-style: none; padding: 0; margin-top: 20px;">
+            {% for player in team1 %}
+            <li style="padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                <span><strong>{{ player.name }}</strong></span>
+                <span class="badge badge-success">{{ player.skill_rating or 5 }}/10</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    
+    <div class="card">
+        <h2 style="color: #e74c3c;">🔴 Team 2</h2>
+        <div class="stat">
+            <div class="stat-value" style="font-size: 1.5em;">{{ team2|length }} players</div>
+            <div class="stat-label">Total Skill: {{ team2_skill }} • Avg: {{ "%.1f"|format(team2_avg) }}</div>
+        </div>
+        <ul style="list-style: none; padding: 0; margin-top: 20px;">
+            {% for player in team2 %}
+            <li style="padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                <span><strong>{{ player.name }}</strong></span>
+                <span class="badge badge-success">{{ player.skill_rating or 5 }}/10</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+
+<div class="card">
+    <h3>Team Balance</h3>
+    <p>
+        {% set diff = ((team1_skill - team2_skill)|abs) %}
+        {% if diff <= 2 %}
+            <span class="badge badge-success">Excellent balance! Skill difference: {{ "%.1f"|format(diff) }}</span>
+        {% elif diff <= 5 %}
+            <span class="badge badge-warning">Good balance. Skill difference: {{ "%.1f"|format(diff) }}</span>
+        {% else %}
+            <span class="badge badge-danger">Uneven teams. Skill difference: {{ "%.1f"|format(diff) }}</span>
+        {% endif %}
+    </p>
+    <p style="margin-top: 10px; color: #7f8c8d;">
+        💡 Tip: Update player skill ratings to improve team balance. 
+        <a href="/players">Edit ratings →</a>
+    </p>
+    <a href="/games/{{ game.id }}/teams" class="btn" style="margin-top: 15px;">🔄 Regenerate Teams</a>
+</div>
+
+{% endif %}
+{% endblock %}

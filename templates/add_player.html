@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Add Player - Football Tracker{% endblock %}
+
+{% block content %}
+<h1>Add New Player</h1>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<div class="card">
+    <form method="POST">
+        <div class="form-group">
+            <label for="name">Name *</label>
+            <input type="text" id="name" name="name" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="phone">Phone</label>
+            <input type="text" id="phone" name="phone">
+        </div>
+        
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email">
+        </div>
+        
+        <div class="form-group">
+            <label for="skill_rating">Skill Rating (1-10)</label>
+            <input type="number" id="skill_rating" name="skill_rating" min="1" max="10" value="5">
+            <small style="color: #7f8c8d; display: block; margin-top: 5px;">
+                1 = Beginner, 5 = Average, 10 = Expert
+            </small>
+        </div>
+        
+        <button type="submit" class="btn btn-success">Add Player</button>
+        <a href="/players" class="btn">Cancel</a>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Players - Football Tracker{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>All Players</h1>
+    <a href="/players/add" class="btn btn-success">➕ Add New Player</a>
+</div>
+
+{% if players %}
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Skill Rating</th>
+                <th>Games Played</th>
+                <th>Total Games</th>
+                <th>Attendance Rate</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for player in players %}
+            <tr>
+                <td><strong>{{ player.name }}</strong></td>
+                <td>{{ player.phone or 'N/A' }}</td>
+                <td>
+                    <span class="badge badge-success">{{ player.skill_rating or 5 }}/10</span>
+                </td>
+                <td>{{ player.games_played }}</td>
+                <td>{{ player.total_games }}</td>
+                <td>
+                    {% if player.attendance_rate >= 75 %}
+                        <span class="badge badge-success">{{ "%.1f"|format(player.attendance_rate) }}%</span>
+                    {% elif player.attendance_rate >= 50 %}
+                        <span class="badge badge-warning">{{ "%.1f"|format(player.attendance_rate) }}%</span>
+                    {% else %}
+                        <span class="badge badge-danger">{{ "%.1f"|format(player.attendance_rate) }}%</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="/players/{{ player.id }}/edit" class="btn" style="padding: 5px 10px; font-size: 0.9em;">Edit</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card">
+    <p>No players registered yet. <a href="/players/add">Add your first player</a>!</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Game Details - Football Tracker{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <a href="/" class="btn">← Back to Games</a>
+    {% if playing|length >= 2 %}
+    <a href="/games/{{ game.id }}/teams" class="btn btn-success">🎲 Generate Balanced Teams</a>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h1>Game on {{ game.date }}</h1>
+    <p><strong>Location:</strong> {{ game.location or 'N/A' }}</p>
+    {% if game.notes %}
+    <p><strong>Notes:</strong> {{ game.notes }}</p>
+    {% endif %}
+</div>
+
+<div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="card stat">
+        <div class="stat-value" style="color: #27ae60;">{{ playing|length }}</div>
+        <div class="stat-label">Playing</div>
+    </div>
+    <div class="card stat">
+        <div class="stat-value" style="color: #f39c12;">{{ maybe|length }}</div>
+        <div class="stat-label">Maybe</div>
+    </div>
+    <div class="card stat">
+        <div class="stat-value" style="color: #e74c3c;">{{ not_playing|length }}</div>
+        <div class="stat-label">Not Playing</div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Record Attendance</h2>
+    <form method="POST" action="/games/{{ game.id }}/attendance">
+        <div class="form-group">
+            <label for="player_id">Player</label>
+            <select id="player_id" name="player_id" required>
+                <option value="">Select a player...</option>
+                {% for player in all_players %}
+                <option value="{{ player.id }}">{{ player.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label for="status">Status</label>
+            <select id="status" name="status" required>
+                <option value="playing">✅ Playing</option>
+                <option value="maybe">❓ Maybe</option>
+                <option value="not_playing">❌ Not Playing</option>
+            </select>
+        </div>
+        
+        <button type="submit" class="btn btn-success">Record Attendance</button>
+    </form>
+</div>
+
+{% if playing %}
+<div class="card">
+    <h2>✅ Playing ({{ playing|length }})</h2>
+    <ul style="list-style: none; padding: 0;">
+        {% for player in playing %}
+        <li style="padding: 8px 0; border-bottom: 1px solid #eee;">
+            {{ player.name }}
+            {% if player.phone %}
+            <span style="color: #7f8c8d; font-size: 0.9em;"> • {{ player.phone }}</span>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% if maybe %}
+<div class="card">
+    <h2>❓ Maybe ({{ maybe|length }})</h2>
+    <ul style="list-style: none; padding: 0;">
+        {% for player in maybe %}
+        <li style="padding: 8px 0; border-bottom: 1px solid #eee;">{{ player.name }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% if not_playing %}
+<div class="card">
+    <h2>❌ Not Playing ({{ not_playing|length }})</h2>
+    <ul style="list-style: none; padding: 0;">
+        {% for player in not_playing %}
+        <li style="padding: 8px 0; border-bottom: 1px solid #eee;">{{ player.name }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+{% endblock %}

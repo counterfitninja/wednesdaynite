@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Add Game - Football Tracker{% endblock %}
+
+{% block content %}
+<h1>Add New Game</h1>
+
+<div class="card">
+    <form method="POST">
+        <div class="form-group">
+            <label for="date">Date *</label>
+            <input type="date" id="date" name="date" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="location">Location</label>
+            <input type="text" id="location" name="location" placeholder="e.g., City Park">
+        </div>
+        
+        <div class="form-group">
+            <label for="notes">Notes</label>
+            <textarea id="notes" name="notes" placeholder="Any additional information..."></textarea>
+        </div>
+        
+        <button type="submit" class="btn btn-success">Add Game</button>
+        <a href="/" class="btn">Cancel</a>
+    </form>
+</div>
+{% endblock %}
