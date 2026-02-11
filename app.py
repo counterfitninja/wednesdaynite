@@ -1,11 +1,104 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session
 import sqlite3
 from datetime import datetime
 import os
+from functools import wraps
 
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'change-this-to-something-secure-in-production')
 
-DATABASE = 'football.db'
+# Build version - timestamp when app starts
+BUILD_VERSION = datetime.now().strftime('%Y.%m.%d.%H%M')
+
+# Network config (hard-coded; adjust here if you change IP/port)
+HOST = '0.0.0.0'   # e.g., '192.168.1.50' if you need a specific LAN IP
+PORT = 5000        # choose your desired port
+
+# Admin password - require environment variable in production
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
+if not ADMIN_PASSWORD:
+    # Only use default if not in Azure (no WEBSITE_INSTANCE_ID)
+    if not os.environ.get('WEBSITE_INSTANCE_ID'):
+        ADMIN_PASSWORD = 'football2026'
+    else:
+        raise ValueError('ADMIN_PASSWORD environment variable must be set in Azure')
+
+@app.context_processor
+def inject_build_version():
+    final_score_game_id = None
+    try:
+        with get_db() as conn:
+            latest_pending = conn.execute('''
+                SELECT id FROM games
+                WHERE date <= date('now') AND (team1_score IS NULL OR team2_score IS NULL)
+                ORDER BY date DESC
+                LIMIT 1
+            ''').fetchone()
+
+            latest_completed = conn.execute('''
+                SELECT id FROM games
+                WHERE date <= date('now')
+                ORDER BY date DESC
+                LIMIT 1
+            ''').fetchone()
+
+            target = latest_pending if latest_pending else latest_completed
+            if target:
+                final_score_game_id = target['id']
+    except Exception as exc:
+        print(f"DEBUG - final score lookup failed: {exc}")
+
+    return {
+        'build_version': BUILD_VERSION,
+        'is_admin': session.get('logged_in', False),
+        'final_score_game_id': final_score_game_id
+    }
+
+# Simple health/version endpoints for smoke testing
+@app.route('/healthz')
+@app.route('/status')
+def healthcheck():
+    return {'status': 'ok', 'build_version': BUILD_VERSION, 'host': HOST, 'port': PORT}
+
+@app.template_filter('ukdate')
+def format_uk_date(date_string):
+    """Convert YYYY-MM-DD to DD/MM/YYYY format"""
+    if not date_string:
+        return ''
+    try:
+        from datetime import datetime
+        date_obj = datetime.strptime(str(date_string), '%Y-%m-%d')
+        return date_obj.strftime('%d/%m/%Y')
+    except:
+        return date_string
+
+@app.template_filter('name_initial')
+def format_name_with_initial(full_name):
+    """Format name as 'FirstName S.' (first name + surname initial)"""
+    if not full_name:
+        return ''
+    parts = full_name.strip().split()
+    if len(parts) == 1:
+        return parts[0]
+    elif len(parts) >= 2:
+        return f"{parts[0]} {parts[-1][0]}."
+    return full_name
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('logged_in'):
+            return redirect(url_for('login', next=request.url))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Use /home directory in Azure Web Apps for persistent storage
+if os.environ.get('WEBSITE_INSTANCE_ID'):
+    # Running in Azure
+    DATABASE = '/home/football.db'
+else:
+    # Running locally
+    DATABASE = 'football.db'
 
 def get_db():
     conn = sqlite3.connect(DATABASE)
@@ -18,9 +111,10 @@ def init_db():
             CREATE TABLE IF NOT EXISTS players (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
+                alias TEXT,
                 phone TEXT,
                 email TEXT,
-                skill_rating INTEGER DEFAULT 5 CHECK(skill_rating >= 1 AND skill_rating <= 10),
+                skill_rating INTEGER DEFAULT 5,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -31,6 +125,8 @@ def init_db():
                 date TEXT NOT NULL,
                 location TEXT,
                 notes TEXT,
+                team1_score INTEGER,
+                team2_score INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -40,7 +136,20 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 game_id INTEGER NOT NULL,
                 player_id INTEGER NOT NULL,
-                status TEXT NOT NULL CHECK(status IN ('playing', 'not_playing', 'maybe')),
+                status TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (game_id) REFERENCES games(id),
+                FOREIGN KEY (player_id) REFERENCES players(id),
+                UNIQUE(game_id, player_id)
+            )
+        ''')
+        
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS team_assignments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id INTEGER NOT NULL,
+                player_id INTEGER NOT NULL,
+                team_number INTEGER NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (game_id) REFERENCES games(id),
                 FOREIGN KEY (player_id) REFERENCES players(id),
@@ -51,12 +160,141 @@ def init_db():
         conn.execute('CREATE INDEX IF NOT EXISTS idx_attendance_game ON attendance(game_id)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_attendance_player ON attendance(player_id)')
         conn.execute('CREATE INDEX IF NOT EXISTS idx_games_date ON games(date)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_team_assignments_game ON team_assignments(game_id)')
+        
+        # Create settings table for app configuration
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        ''')
+        
+        # ============================================================
+        # DATABASE MIGRATIONS
+        # ============================================================
+        # IMPORTANT: When adding new columns to existing tables, ALWAYS
+        # add them here with ALTER TABLE wrapped in try/except blocks.
+        # This ensures existing Azure databases get updated gracefully
+        # without breaking the app or requiring manual SQL commands.
+        # 
+        # Template for adding new columns:
+        # try:
+        #     conn.execute('ALTER TABLE table_name ADD COLUMN column_name TYPE')
+        # except sqlite3.OperationalError:
+        #     pass  # Column already exists
+        # ============================================================
+        
+        # Migration: Add score columns if they don't exist
+        try:
+            conn.execute('ALTER TABLE players ADD COLUMN alias TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        try:
+            conn.execute('ALTER TABLE games ADD COLUMN team1_score INTEGER')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        try:
+            conn.execute('ALTER TABLE games ADD COLUMN team2_score INTEGER')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # Ensure default alias for known mapping
+        conn.execute("UPDATE players SET alias = 'you' WHERE name = 'Dave Bird' AND (alias IS NULL OR alias = '')")
+
         conn.commit()
+
+# Initialize database on module load (for Gunicorn/Azure)
+init_db()
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        password = request.form.get('password')
+        # Debug logging
+        print(f"DEBUG - Entered password length: {len(password) if password else 0}")
+        print(f"DEBUG - Expected password length: {len(ADMIN_PASSWORD) if ADMIN_PASSWORD else 0}")
+        print(f"DEBUG - Password match: {password == ADMIN_PASSWORD}")
+        
+        if password == ADMIN_PASSWORD:
+            session['logged_in'] = True
+            next_url = request.args.get('next', url_for('admin'))
+            return redirect(next_url)
+        else:
+            return render_template('login.html', error='Incorrect password')
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('logged_in', None)
+    return redirect(url_for('index'))
 
 @app.route('/')
 def index():
+    from datetime import datetime, timedelta
+    
     with get_db() as conn:
+        # Auto-create next Wednesday game if it doesn't exist
+        today = datetime.now()
+        days_until_wednesday = (2 - today.weekday()) % 7  # 2 = Wednesday (0=Monday)
+        if days_until_wednesday == 0 and today.hour >= 21:  # After 9pm Wednesday, create next week
+            days_until_wednesday = 7
+        
+        next_wednesday = today + timedelta(days=days_until_wednesday)
+        next_wednesday_str = next_wednesday.strftime('%Y-%m-%d')
+        
+        # Check if game already exists for this Wednesday
+        existing = conn.execute('SELECT id FROM games WHERE date = ?', (next_wednesday_str,)).fetchone()
+        
+        if not existing:
+            conn.execute(
+                'INSERT INTO games (date, location, notes) VALUES (?, ?, ?)',
+                (next_wednesday_str, 'Selwood School', 'Weekly Wednesday 9pm game - Auto-created')
+            )
+            conn.commit()
+        
         games = conn.execute('SELECT * FROM games ORDER BY date DESC LIMIT 10').fetchall()
+        
+        game_data = []
+        for game in games:
+            attendance = conn.execute('''
+                SELECT COUNT(*) as count 
+                FROM attendance 
+                WHERE game_id = ? AND status = 'playing'
+            ''', (game['id'],)).fetchone()
+            
+            # Safely get score fields (may not exist in older databases)
+            try:
+                team1_score = game['team1_score']
+                team2_score = game['team2_score']
+            except (KeyError, IndexError):
+                team1_score = None
+                team2_score = None
+            
+            game_data.append({
+                'id': game['id'],
+                'date': game['date'],
+                'location': game['location'],
+                'notes': game['notes'],
+                'players_count': attendance['count'] if attendance else 0,
+                'team1_score': team1_score,
+                'team2_score': team2_score
+            })
+    
+    return render_template('index.html', games=game_data, is_admin=session.get('logged_in'))
+
+@app.route('/admin')
+@login_required
+def admin():
+    return redirect(url_for('admin_games'))
+
+@app.route('/admin/games')
+@login_required
+def admin_games():
+    with get_db() as conn:
+        games = conn.execute('SELECT * FROM games ORDER BY date DESC LIMIT 20').fetchall()
         
         game_data = []
         for game in games:
@@ -71,17 +309,81 @@ def index():
                 'date': game['date'],
                 'location': game['location'],
                 'notes': game['notes'],
-                'players_count': attendance['count']
+                'players_count': attendance['count'] if attendance else 0
             })
     
-    return render_template('index.html', games=game_data)
+    return render_template('admin_games.html', games=game_data)
 
-@app.route('/players')
-def players():
+@app.route('/admin/players')
+@login_required
+def admin_players():
     with get_db() as conn:
+        # Get total number of games (excluding future games)
+        total_games_count = conn.execute("SELECT COUNT(*) as count FROM games WHERE date <= date('now')").fetchone()['count']
+        
+        # Get player data with attendance statistics
         players = conn.execute('''
             SELECT 
-                p.*,
+                p.id,
+                p.name,
+                p.alias,
+                p.phone,
+                p.email,
+                p.skill_rating,
+                COUNT(DISTINCT CASE WHEN a.status = 'playing' AND g.date <= date('now') THEN a.game_id END) as games_played,
+                ? as total_games,
+                CASE 
+                    WHEN ? > 0 
+                    THEN ROUND((COUNT(DISTINCT CASE WHEN a.status = 'playing' AND g.date <= date('now') THEN a.game_id END) * 100.0 / ?), 1)
+                    ELSE 0 
+                END as attendance_rate
+            FROM players p
+            LEFT JOIN attendance a ON p.id = a.player_id
+            LEFT JOIN games g ON a.game_id = g.id
+            GROUP BY p.id, p.name, p.alias, p.phone, p.email, p.skill_rating
+            ORDER BY p.name
+        ''', (total_games_count, total_games_count, total_games_count)).fetchall()
+    return render_template('admin_players.html', players=players)
+
+@app.route('/admin/settings', methods=['GET', 'POST'])
+@login_required
+def admin_settings():
+    with get_db() as conn:
+        if request.method == 'POST':
+            notifications_enabled = request.form.get('notifications_enabled') == 'on'
+            
+            # Update or insert setting
+            conn.execute('''
+                INSERT OR REPLACE INTO settings (key, value) 
+                VALUES ('notifications_enabled', ?)
+            ''', ('true' if notifications_enabled else 'false',))
+            conn.commit()
+            
+            return redirect(url_for('admin_settings'))
+        
+        # GET request - fetch current setting
+        setting = conn.execute(
+            "SELECT value FROM settings WHERE key = 'notifications_enabled'"
+        ).fetchone()
+        
+        notifications_enabled = setting['value'] == 'true' if setting else False
+    
+    return render_template('admin_settings.html', notifications_enabled=notifications_enabled)
+
+@app.route('/api/settings/notifications')
+def get_notification_setting():
+    """API endpoint for JavaScript to check if notifications are enabled"""
+    with get_db() as conn:
+        setting = conn.execute(
+            "SELECT value FROM settings WHERE key = 'notifications_enabled'"
+        ).fetchone()
+        
+        enabled = setting['value'] == 'true' if setting else False
+    
+    return jsonify({'enabled': enabled})
+    with get_db() as conn:
+        players = conn.execute('''
+            SELECT p.*,
                 COUNT(a.id) as total_games,
                 SUM(CASE WHEN a.status = 'playing' THEN 1 ELSE 0 END) as games_played,
                 CASE 
@@ -95,21 +397,145 @@ def players():
             ORDER BY attendance_rate DESC, p.name
         ''').fetchall()
     
-    return render_template('players.html', players=players)
+    return render_template('admin_players.html', players=players)
+
+@app.route('/players')
+def players():
+    # Check if user is logged in
+    if session.get('logged_in'):
+        return redirect(url_for('admin_players'))
+    else:
+        # Public view - only show player names
+        with get_db() as conn:
+            players = conn.execute('SELECT id, name FROM players ORDER BY name').fetchall()
+        return render_template('players_public.html', players=players)
+
+@app.route('/leaderboard')
+def leaderboard():
+    from datetime import datetime
+    current_year = datetime.now().year
+    
+    with get_db() as conn:
+        latest_pending = conn.execute('''
+            SELECT id, date FROM games
+            WHERE date <= date('now') AND (team1_score IS NULL OR team2_score IS NULL)
+            ORDER BY date DESC
+            LIMIT 1
+        ''').fetchone()
+
+        latest_completed = conn.execute('''
+            SELECT id, date FROM games
+            WHERE date <= date('now')
+            ORDER BY date DESC
+            LIMIT 1
+        ''').fetchone()
+
+        final_score_target = latest_pending if latest_pending else latest_completed
+
+        # Get all games with scores from this year
+        leaderboard_data = conn.execute('''
+            SELECT 
+                p.id,
+                p.name,
+                SUM(CASE 
+                    WHEN (ta.team_number = 1 AND g.team1_score > g.team2_score) OR
+                         (ta.team_number = 2 AND g.team2_score > g.team1_score)
+                    THEN 1 ELSE 0 
+                END) as wins,
+                SUM(CASE 
+                    WHEN (ta.team_number = 1 AND g.team1_score < g.team2_score) OR
+                         (ta.team_number = 2 AND g.team2_score < g.team1_score)
+                    THEN 1 ELSE 0 
+                END) as losses,
+                SUM(CASE 
+                    WHEN g.team1_score = g.team2_score
+                    THEN 1 ELSE 0
+                END) as draws,
+                COUNT(*) as total_games
+            FROM players p
+            JOIN team_assignments ta ON p.id = ta.player_id
+            JOIN games g ON ta.game_id = g.id
+            WHERE g.team1_score IS NOT NULL 
+                AND g.team2_score IS NOT NULL
+                AND strftime('%Y', g.date) = ?
+            GROUP BY p.id, p.name
+            HAVING total_games > 0
+            ORDER BY wins DESC, total_games DESC, p.name
+        ''', (str(current_year),)).fetchall()
+        
+        # Calculate win percentages
+        leaderboard = []
+        for row in leaderboard_data:
+            win_pct = round((row['wins'] / row['total_games'] * 100) if row['total_games'] > 0 else 0, 1)
+            leaderboard.append({
+                'name': row['name'],
+                'wins': row['wins'],
+                'draws': row['draws'],
+                'losses': row['losses'],
+                'total_games': row['total_games'],
+                'win_percentage': win_pct
+            })
+        
+        # Get total games with scores
+        total_games = conn.execute('''
+            SELECT COUNT(*) as count 
+            FROM games 
+            WHERE team1_score IS NOT NULL 
+                AND team2_score IS NOT NULL
+                AND strftime('%Y', date) = ?
+        ''', (str(current_year),)).fetchone()['count']
+        
+        # Get attendance leaderboard (all-time, matching players page)
+        total_games_all_time = conn.execute('''
+            SELECT COUNT(*) as count 
+            FROM games 
+            WHERE date <= date('now')
+        ''').fetchone()['count']
+        
+        attendance_data = conn.execute('''
+            SELECT 
+                p.id,
+                p.name,
+                COUNT(DISTINCT CASE WHEN a.status = 'playing' AND g.date <= date('now') THEN a.game_id END) as games_played,
+                CASE 
+                    WHEN ? > 0 
+                    THEN ROUND(COUNT(DISTINCT CASE WHEN a.status = 'playing' AND g.date <= date('now') THEN a.game_id END) * 100.0 / ?, 1)
+                    ELSE 0 
+                END as attendance_rate
+            FROM players p
+            LEFT JOIN attendance a ON p.id = a.player_id
+            LEFT JOIN games g ON a.game_id = g.id
+            GROUP BY p.id, p.name
+            ORDER BY attendance_rate DESC, games_played DESC, p.name
+        ''', (total_games_all_time, total_games_all_time)).fetchall()
+    
+    return render_template('leaderboard.html', 
+                         leaderboard=leaderboard,
+                         attendance_leaderboard=attendance_data,
+                         total_games=total_games,
+                         total_players=len(leaderboard),
+                         year=current_year,
+                         final_score_game_id=final_score_target['id'] if final_score_target else None)
+
 @app.route('/players/add', methods=['GET', 'POST'])
 def add_player():
     if request.method == 'POST':
         name = request.form['name']
+        alias = request.form.get('alias', '').strip() or None
         phone = request.form.get('phone', '')
         email = request.form.get('email', '')
-        skill_rating = request.form.get('skill_rating', 5)
+        skill_rating = request.form.get('skill_rating', 5, type=int)
+        
+        # Validate skill rating is between 1-5
+        if skill_rating < 1 or skill_rating > 5:
+            return render_template('add_player.html', error='Skill rating must be between 1 and 5')
         
         try:
             with get_db() as conn:
-                conn.execute('INSERT INTO players (name, phone, email, skill_rating) VALUES (?, ?, ?, ?)',
-                           (name, phone, email, skill_rating))
+                conn.execute('INSERT INTO players (name, alias, phone, email, skill_rating) VALUES (?, ?, ?, ?, ?)',
+                           (name, alias, phone, email, skill_rating))
                 conn.commit()
-            return redirect(url_for('players'))
+            return redirect(url_for('admin_players'))
         except sqlite3.IntegrityError:
             return render_template('add_player.html', error='Player already exists')
     
@@ -120,14 +546,20 @@ def edit_player(player_id):
     with get_db() as conn:
         if request.method == 'POST':
             name = request.form['name']
+            alias = request.form.get('alias', '').strip() or None
             phone = request.form.get('phone', '')
             email = request.form.get('email', '')
-            skill_rating = request.form.get('skill_rating', 5)
+            skill_rating = request.form.get('skill_rating', 5, type=int)
             
-            conn.execute('UPDATE players SET name = ?, phone = ?, email = ?, skill_rating = ? WHERE id = ?',
-                       (name, phone, email, skill_rating, player_id))
+            # Validate skill rating is between 1-5
+            if skill_rating < 1 or skill_rating > 5:
+                player = conn.execute('SELECT * FROM players WHERE id = ?', (player_id,)).fetchone()
+                return render_template('edit_player.html', player=player, error='Skill rating must be between 1 and 5')
+            
+            conn.execute('UPDATE players SET name = ?, alias = ?, phone = ?, email = ?, skill_rating = ? WHERE id = ?',
+                       (name, alias, phone, email, skill_rating, player_id))
             conn.commit()
-            return redirect(url_for('players'))
+            return redirect(url_for('admin_players'))
         
         player = conn.execute('SELECT * FROM players WHERE id = ?', (player_id,)).fetchone()
         if not player:
@@ -135,6 +567,64 @@ def edit_player(player_id):
         
         return render_template('edit_player.html', player=player)
     return render_template('add_player.html')
+
+@app.route('/players/<int:player_id>/delete', methods=['POST'])
+@login_required
+def delete_player(player_id):
+    with get_db() as conn:
+        # Delete attendance records first (foreign key constraint)
+        conn.execute('DELETE FROM attendance WHERE player_id = ?', (player_id,))
+        # Delete the player
+        conn.execute('DELETE FROM players WHERE id = ?', (player_id,))
+        conn.commit()
+    
+    return redirect(url_for('admin_players'))
+
+@app.route('/players/merge', methods=['POST'])
+@login_required
+def merge_players():
+    source_player_id = request.form.get('source_player_id', type=int)
+    target_player_id = request.form.get('target_player_id', type=int)
+    
+    if not source_player_id or not target_player_id:
+        return redirect(url_for('admin_players'))
+    
+    if source_player_id == target_player_id:
+        return redirect(url_for('admin_players'))
+    
+    with get_db() as conn:
+        # Update all attendance records from source to target
+        # First, delete any duplicate attendance records (same game)
+        conn.execute('''
+            DELETE FROM attendance 
+            WHERE id IN (
+                SELECT a1.id 
+                FROM attendance a1
+                INNER JOIN attendance a2 ON a1.game_id = a2.game_id
+                WHERE a1.player_id = ? AND a2.player_id = ?
+            )
+        ''', (source_player_id, target_player_id))
+        
+        # Update remaining attendance records
+        conn.execute('''
+            UPDATE attendance 
+            SET player_id = ? 
+            WHERE player_id = ?
+        ''', (target_player_id, source_player_id))
+        
+        # Update team assignments if they exist
+        conn.execute('''
+            UPDATE team_assignments 
+            SET player_id = ? 
+            WHERE player_id = ?
+        ''', (target_player_id, source_player_id))
+        
+        # Delete the source player
+        conn.execute('DELETE FROM players WHERE id = ?', (source_player_id,))
+        
+        conn.commit()
+    
+    return redirect(url_for('admin_players'))
 
 @app.route('/games/add', methods=['GET', 'POST'])
 def add_game():
@@ -148,11 +638,56 @@ def add_game():
                        (date, location, notes))
             conn.commit()
         
-        return redirect(url_for('index'))
+        return redirect(url_for('admin_games'))
     
     return render_template('add_game.html')
 
+@app.route('/games/<int:game_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_game(game_id):
+    with get_db() as conn:
+        if request.method == 'POST':
+            date = request.form['date']
+            location = request.form['location']
+            notes = request.form.get('notes', '')
+            team1_score = request.form.get('team1_score', None)
+            team2_score = request.form.get('team2_score', None)
+            
+            # Convert empty strings to None for database
+            team1_score = int(team1_score) if team1_score else None
+            team2_score = int(team2_score) if team2_score else None
+            
+            conn.execute('''
+                UPDATE games 
+                SET date = ?, location = ?, notes = ?, team1_score = ?, team2_score = ?
+                WHERE id = ?
+            ''', (date, location, notes, team1_score, team2_score, game_id))
+            conn.commit()
+            
+            return redirect(url_for('admin_games'))
+        
+        # GET request - show form
+        game = conn.execute('SELECT * FROM games WHERE id = ?', (game_id,)).fetchone()
+        
+        if not game:
+            return "Game not found", 404
+        
+        return render_template('edit_game.html', game=game)
+
+@app.route('/games/<int:game_id>/delete', methods=['POST'])
+@login_required
+def delete_game(game_id):
+    with get_db() as conn:
+        # Delete attendance records first (foreign key constraint)
+        conn.execute('DELETE FROM attendance WHERE game_id = ?', (game_id,))
+        # Delete the game
+        conn.execute('DELETE FROM games WHERE id = ?', (game_id,))
+        conn.commit()
+    
+    return redirect(url_for('admin_games'))
+
 @app.route('/games/<int:game_id>')
+@login_required
 def game_detail(game_id):
     with get_db() as conn:
         game = conn.execute('SELECT * FROM games WHERE id = ?', (game_id,)).fetchone()
@@ -176,6 +711,11 @@ def game_detail(game_id):
     
     return render_template('game_detail.html', 
                          game=game, 
+                         playing=playing,
+                         not_playing=not_playing,
+                         maybe=maybe,
+                         all_players=all_players)
+
 @app.route('/games/<int:game_id>/teams')
 def generate_teams(game_id):
     import random
@@ -186,7 +726,57 @@ def generate_teams(game_id):
         if not game:
             return "Game not found", 404
         
-        # Get all players marked as playing
+        # Check if team_assignments table exists, if not create it
+        try:
+            conn.execute('SELECT 1 FROM team_assignments LIMIT 1')
+        except:
+            # Table doesn't exist, create it
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS team_assignments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    game_id INTEGER NOT NULL,
+                    player_id INTEGER NOT NULL,
+                    team_number INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (game_id) REFERENCES games(id),
+                    FOREIGN KEY (player_id) REFERENCES players(id),
+                    UNIQUE(game_id, player_id)
+                )
+            ''')
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_team_assignments_game ON team_assignments(game_id)')
+            conn.commit()
+        
+        # Check if teams have already been generated for this game
+        existing_teams = conn.execute('''
+            SELECT p.*, ta.team_number
+            FROM team_assignments ta
+            JOIN players p ON ta.player_id = p.id
+            WHERE ta.game_id = ?
+            ORDER BY ta.team_number, p.name
+        ''', (game_id,)).fetchall()
+        
+        if existing_teams:
+            # Use existing team assignments
+            team1 = [dict(p) for p in existing_teams if p['team_number'] == 1]
+            team2 = [dict(p) for p in existing_teams if p['team_number'] == 2]
+            
+            return render_template('teams.html', 
+                                 game=game,
+                                 team1=team1,
+                                 team2=team2,
+                                 teams_generated=True,
+                                 is_admin=session.get('logged_in'))
+        
+        # No existing teams - check if admin wants to generate
+        if not session.get('logged_in'):
+            # Public user - show "not generated yet" message
+            return render_template('teams.html', 
+                                 game=game,
+                                 teams_generated=False,
+                                 is_admin=False)
+        
+        # Admin user - generate teams
+        # Get all players marked as playing with their skill ratings
         playing = conn.execute('''
             SELECT p.*, a.status
             FROM attendance a
@@ -196,49 +786,192 @@ def generate_teams(game_id):
         ''', (game_id,)).fetchall()
         
         if len(playing) < 2:
-            return render_template('teams.html', game=game, error='Need at least 2 players to create teams')
+            return render_template('teams.html', game=game, error='Need at least 2 players to create teams', is_admin=True, teams_generated=False)
         
-        # Convert to list and shuffle
-        players_list = list(playing)
-        random.shuffle(players_list)
+        # Convert to list and sort by skill rating (highest to lowest)
+        players_list = [dict(player) for player in playing]
+        players_list.sort(key=lambda x: x.get('skill_rating', 5), reverse=True)
         
-        # Sort by skill rating (descending) for balanced distribution
-        players_list.sort(key=lambda p: p['skill_rating'] or 5, reverse=True)
+        # Shuffle players with same skill rating for variety
+        from itertools import groupby
+        shuffled_list = []
+        for skill, group in groupby(players_list, key=lambda x: x.get('skill_rating', 5)):
+            group_list = list(group)
+            random.shuffle(group_list)
+            shuffled_list.extend(group_list)
         
-        # Alternate assignment to balance teams
+        # Snake draft: alternate assignment for balanced teams
+        # Team 1 gets 1st, 4th, 5th, 8th, 9th, etc.
+        # Team 2 gets 2nd, 3rd, 6th, 7th, 10th, etc.
         team1 = []
         team2 = []
-        team1_skill = 0
-        team2_skill = 0
         
-        for player in players_list:
-            skill = player['skill_rating'] or 5
-            if team1_skill <= team2_skill:
+        for i, player in enumerate(shuffled_list):
+            if i % 4 == 0 or i % 4 == 3:
                 team1.append(player)
-                team1_skill += skill
             else:
                 team2.append(player)
-                team2_skill += skill
         
-        # Calculate average skill
-        team1_avg = team1_skill / len(team1) if team1 else 0
-        team2_avg = team2_skill / len(team2) if team2 else 0
+        # Save team assignments to database
+        for player in team1:
+            conn.execute('''
+                INSERT INTO team_assignments (game_id, player_id, team_number)
+                VALUES (?, ?, 1)
+                ON CONFLICT(game_id, player_id) DO UPDATE SET team_number = 1
+            ''', (game_id, player['id']))
+        
+        for player in team2:
+            conn.execute('''
+                INSERT INTO team_assignments (game_id, player_id, team_number)
+                VALUES (?, ?, 2)
+                ON CONFLICT(game_id, player_id) DO UPDATE SET team_number = 2
+            ''', (game_id, player['id']))
+        
+        conn.commit()
         
         return render_template('teams.html', 
                              game=game,
                              team1=team1,
                              team2=team2,
-                             team1_skill=team1_skill,
-                             team2_skill=team2_skill,
-                             team1_avg=team1_avg,
-                             team2_avg=team2_avg)
+                             teams_generated=True,
+                             is_admin=session.get('logged_in'))
 
-@app.route('/import', methods=['GET', 'POST'])
-def import_csv():        not_playing=not_playing,
-                         maybe=maybe,
-                         all_players=all_players)
+@app.route('/games/<int:game_id>/teams/regenerate', methods=['POST'])
+@login_required
+def regenerate_teams(game_id):
+    with get_db() as conn:
+        # Delete existing team assignments
+        conn.execute('DELETE FROM team_assignments WHERE game_id = ?', (game_id,))
+        conn.commit()
+    
+    # Redirect to teams page which will generate new teams
+    return redirect(url_for('generate_teams', game_id=game_id))
+
+@app.route('/games/<int:game_id>/teams/manual', methods=['GET', 'POST'])
+@login_required
+def manual_teams(game_id):
+    with get_db() as conn:
+        game = conn.execute('SELECT * FROM games WHERE id = ?', (game_id,)).fetchone()
+        
+        if not game:
+            return "Game not found", 404
+        
+        # Ensure table exists
+        try:
+            conn.execute('SELECT 1 FROM team_assignments LIMIT 1')
+        except:
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS team_assignments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    game_id INTEGER NOT NULL,
+                    player_id INTEGER NOT NULL,
+                    team_number INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (game_id) REFERENCES games(id),
+                    FOREIGN KEY (player_id) REFERENCES players(id),
+                    UNIQUE(game_id, player_id)
+                )
+            ''')
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_team_assignments_game ON team_assignments(game_id)')
+            conn.commit()
+        
+        if request.method == 'POST':
+            # Get team assignments from form
+            team1_ids = request.form.getlist('team1_players')
+            team2_ids = request.form.getlist('team2_players')
+            
+            # Delete existing assignments for this game
+            conn.execute('DELETE FROM team_assignments WHERE game_id = ?', (game_id,))
+            
+            # Save team 1 assignments
+            for player_id in team1_ids:
+                conn.execute('''
+                    INSERT INTO team_assignments (game_id, player_id, team_number)
+                    VALUES (?, ?, 1)
+                ''', (game_id, player_id))
+            
+            # Save team 2 assignments
+            for player_id in team2_ids:
+                conn.execute('''
+                    INSERT INTO team_assignments (game_id, player_id, team_number)
+                    VALUES (?, ?, 2)
+                ''', (game_id, player_id))
+            
+            conn.commit()
+            
+            return redirect(url_for('generate_teams', game_id=game_id))
+        
+        # GET request - show manual team builder
+        # Get all players marked as playing
+        playing = conn.execute('''
+            SELECT p.*
+            FROM attendance a
+            JOIN players p ON a.player_id = p.id
+            WHERE a.game_id = ? AND a.status = 'playing'
+            ORDER BY p.name
+        ''', (game_id,)).fetchall()
+        
+        # Get existing team assignments if any
+        existing_teams = conn.execute('''
+            SELECT p.*, ta.team_number
+            FROM team_assignments ta
+            JOIN players p ON ta.player_id = p.id
+            WHERE ta.game_id = ?
+            ORDER BY ta.team_number, p.name
+        ''', (game_id,)).fetchall()
+        
+        if existing_teams:
+            # Use existing assignments
+            team1 = [dict(p) for p in existing_teams if p['team_number'] == 1]
+            team2 = [dict(p) for p in existing_teams if p['team_number'] == 2]
+            assigned_ids = {p['id'] for p in existing_teams}
+            unassigned = [dict(p) for p in playing if p['id'] not in assigned_ids]
+        else:
+            # Start with empty teams
+            team1 = []
+            team2 = []
+            unassigned = [dict(p) for p in playing]
+        
+        return render_template('teams_manual.html',
+                             game=game,
+                             team1=team1,
+                             team2=team2,
+                             unassigned=unassigned)
+
+@app.route('/games/<int:game_id>/teams/watch')
+def teams_watch_view(game_id):
+    with get_db() as conn:
+        game = conn.execute('SELECT * FROM games WHERE id = ?', (game_id,)).fetchone()
+        
+        if not game:
+            return "Game not found", 404
+        
+        # Check if team_assignments table exists
+        try:
+            # Use saved team assignments
+            existing_teams = conn.execute('''
+                SELECT p.*, ta.team_number
+                FROM team_assignments ta
+                JOIN players p ON ta.player_id = p.id
+                WHERE ta.game_id = ?
+                ORDER BY ta.team_number, p.name
+            ''', (game_id,)).fetchall()
+            
+            if not existing_teams:
+                return "No teams generated yet", 404
+            
+            team1 = [dict(p) for p in existing_teams if p['team_number'] == 1]
+            team2 = [dict(p) for p in existing_teams if p['team_number'] == 2]
+            
+            return render_template('teams_watch.html', 
+                                 game=game,
+                                 team1=team1,
+                                 team2=team2)
+        except:
+            return "No teams generated yet", 404
 
 @app.route('/games/<int:game_id>/attendance', methods=['POST'])
+@login_required
 def update_attendance(game_id):
     player_id = request.form['player_id']
     status = request.form['status']
@@ -253,8 +986,73 @@ def update_attendance(game_id):
         conn.commit()
     
     return redirect(url_for('game_detail', game_id=game_id))
+@app.route('/games/<int:game_id>/bulk-remove', methods=['POST'])
+@login_required
+def bulk_remove_attendance(game_id):
+    player_ids = request.form.getlist('player_ids')
+    
+    if not player_ids:
+        return redirect(url_for('game_detail', game_id=game_id))
+    
+    with get_db() as conn:
+        # Delete attendance records for selected players
+        placeholders = ','.join('?' * len(player_ids))
+        conn.execute(f'DELETE FROM attendance WHERE game_id = ? AND player_id IN ({placeholders})',
+                    [game_id] + player_ids)
+        conn.commit()
+    
+    return redirect(url_for('game_detail', game_id=game_id))
+
+@app.route('/games/<int:game_id>/bulk-attendance', methods=['POST'])
+@login_required
+def bulk_attendance(game_id):
+    players_text = request.form.get('players_text', '')
+    
+    if not players_text.strip():
+        return redirect(url_for('game_detail', game_id=game_id))
+    
+    # Split by newlines and clean up
+    playing_names = [name.strip() for name in players_text.split('\n') if name.strip()]
+    
+    with get_db() as conn:
+        # Get all players
+        all_players = conn.execute('SELECT id, name FROM players').fetchall()
+        playing_ids = []
+        
+        # Process players who are playing
+        for name in playing_names:
+            # Get or create player
+            player = conn.execute('SELECT id FROM players WHERE name = ? OR alias = ?', (name, name)).fetchone()
+            
+            if not player:
+                try:
+                    cursor = conn.execute('INSERT INTO players (name, skill_rating) VALUES (?, ?)', (name, 3))
+                    player_id = cursor.lastrowid
+                    playing_ids.append(player_id)
+                except:
+                    continue
+            else:
+                player_id = player['id']
+                playing_ids.append(player_id)
+            
+            # Mark as playing
+            try:
+                conn.execute('''
+                    INSERT INTO attendance (game_id, player_id, status) 
+                    VALUES (?, ?, 'playing')
+                    ON CONFLICT(game_id, player_id) 
+                    DO UPDATE SET status = 'playing'
+                ''', (game_id, player_id))
+            except:
+                continue
+        
+        # Don't mark others as not playing - only update the ones listed
+        conn.commit()
+    
+    return redirect(url_for('game_detail', game_id=game_id))
 
 @app.route('/import', methods=['GET', 'POST'])
+@login_required
 def import_csv():
     if request.method == 'POST':
         if 'file' not in request.files:
@@ -287,6 +1085,10 @@ def import_csv():
                     
                     if not player_name:
                         continue
+
+                    # Normalize alias: CSVs with "you" should map to the real name
+                    if player_name.strip().lower() == 'you':
+                        player_name = 'Dave Bird'
                     
                     # Normalize status
                     status_lower = status_raw.lower().strip()
@@ -298,7 +1100,7 @@ def import_csv():
                         status = 'not_playing'
                     
                     # Get or create player
-                    player = conn.execute('SELECT id FROM players WHERE name = ?', (player_name,)).fetchone()
+                    player = conn.execute('SELECT id FROM players WHERE name = ? OR alias = ?', (player_name, player_name)).fetchone()
                     
                     if not player:
                         cursor = conn.execute('INSERT INTO players (name) VALUES (?)', (player_name,))
@@ -320,6 +1122,17 @@ def import_csv():
     
     return render_template('import.html')
 
+@app.route('/service-worker.js')
+def service_worker():
+    from flask import send_from_directory, make_response
+    response = make_response(send_from_directory('static', 'service-worker.js'))
+    response.headers['Content-Type'] = 'application/javascript'
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
+# Initialize database on module load (for Gunicorn/Azure)
+init_db()
+
 if __name__ == '__main__':
-    init_db()
-    app.run(debug=True)
+    print(f"Starting Flask server on {HOST}:{PORT}")
+    app.run(host=HOST, port=PORT, debug=True)

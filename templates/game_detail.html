@@ -1,17 +1,20 @@
 {% extends "base.html" %}
 
-{% block title %}Game Details - Football Tracker{% endblock %}
+{% block title %}Game Details - Wednesday Night FC{% endblock %}
 
 {% block content %}
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
     <a href="/" class="btn">← Back to Games</a>
     {% if playing|length >= 2 %}
-    <a href="/games/{{ game.id }}/teams" class="btn btn-success">🎲 Generate Balanced Teams</a>
+    <div>
+        <a href="/games/{{ game.id }}/teams" class="btn btn-success">🎲 Generate Balanced Teams</a>
+        <a href="/games/{{ game.id }}/teams/manual" class="btn" style="background-color: #9b59b6;">✏️ Manual Teams</a>
+    </div>
     {% endif %}
 </div>
 
 <div class="card">
-    <h1>Game on {{ game.date }}</h1>
+    <h1>Game on {{ game.date|ukdate }}</h1>
     <p><strong>Location:</strong> {{ game.location or 'N/A' }}</p>
     {% if game.notes %}
     <p><strong>Notes:</strong> {{ game.notes }}</p>
@@ -35,6 +38,37 @@
 
 <div class="card">
     <h2>Record Attendance</h2>
+    
+    <div style="margin-bottom: 30px;">
+        <h3 style="font-size: 1.1em; margin-bottom: 10px;">Quick Add - Paste or Select Players</h3>
+        <p style="color: #7f8c8d; font-size: 0.9em; margin-bottom: 10px;">
+            📝 <span class="desktop-only">Hold Ctrl (Cmd on Mac) to select multiple players, or Shift for range selection</span><span class="mobile-only">Tap multiple players to select</span>
+        </p>
+        <form method="POST" action="/games/{{ game.id }}/bulk-attendance">
+            <div class="form-group">
+                <label for="historic_players">Quick Select Historic Players (Multi-select enabled)</label>
+                <select id="historic_players" multiple size="10" style="width: 100%; margin-bottom: 10px; padding: 12px; border: 2px solid #3498db; font-size: 16px; border-radius: 4px;">
+                    {% for player in all_players %}
+                    <option value="{{ player.name }}" style="padding: 10px; font-size: 16px;">{{ player.name }}</option>
+                    {% endfor %}
+                </select>
+                <button type="button" onclick="addSelectedPlayers()" class="btn" style="margin-bottom: 15px; width: 100%; font-size: 16px; padding: 14px;">
+                    ⬇️ Add Selected Players to List Below
+                </button>
+            </div>
+            
+            <div class="form-group">
+                <label for="players_text">Players Who Played (one per line)</label>
+                <textarea id="players_text" name="players_text" placeholder="John Smith&#10;Jane Doe&#10;Mike Johnson" style="min-height: 120px; font-size: 16px; padding: 12px;"></textarea>
+            </div>
+            
+            <button type="submit" class="btn btn-success" style="font-size: 16px; padding: 14px;">✅ Mark as Playing</button>
+        </form>
+    </div>
+    
+    <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+    
+    <h3 style="font-size: 1.1em; margin-bottom: 10px;">Or Add Individual Player</h3>
     <form method="POST" action="/games/{{ game.id }}/attendance">
         <div class="form-group">
             <label for="player_id">Player</label>
@@ -62,6 +96,22 @@
 {% if playing %}
 <div class="card">
     <h2>✅ Playing ({{ playing|length }})</h2>
+    
+    <form method="POST" action="/games/{{ game.id }}/bulk-remove" style="margin-bottom: 20px;">
+        <div class="form-group">
+            <label for="remove_players">Select Players to Remove (if pulling out)</label>
+            <select id="remove_players" name="player_ids" multiple size="8" style="width: 100%; margin-bottom: 10px; padding: 12px; border: 2px solid #e74c3c; font-size: 16px; border-radius: 4px;">
+                {% for player in playing %}
+                <option value="{{ player.id }}" style="padding: 10px; font-size: 16px;">{{ player.name }}</option>
+                {% endfor %}
+            </select>
+            <p style="color: #7f8c8d; font-size: 0.9em; margin-bottom: 10px;">
+                <span class="desktop-only">Hold Ctrl (Cmd on Mac) to select multiple</span><span class="mobile-only">Tap multiple players to select</span>
+            </p>
+            <button type="submit" class="btn" style="background-color: #e74c3c; font-size: 16px; padding: 14px;" onclick="return confirm('Remove selected players from playing list?');">❌ Remove Selected Players</button>
+        </div>
+    </form>
+    
     <ul style="list-style: none; padding: 0;">
         {% for player in playing %}
         <li style="padding: 8px 0; border-bottom: 1px solid #eee;">
@@ -85,6 +135,35 @@
     </ul>
 </div>
 {% endif %}
+
+<script>
+function addSelectedPlayers() {
+    const select = document.getElementById('historic_players');
+    const textarea = document.getElementById('players_text');
+    const selected = Array.from(select.selectedOptions).map(opt => opt.value);
+    
+    if (selected.length === 0) {
+        alert('Please select at least one player from the list');
+        return;
+    }
+    
+    // Get existing names in textarea
+    const existing = textarea.value.trim().split('\n').filter(name => name.trim());
+    
+    // Add selected names that aren't already in the list
+    selected.forEach(name => {
+        if (!existing.includes(name)) {
+            existing.push(name);
+        }
+    });
+    
+    // Update textarea
+    textarea.value = existing.join('\n');
+    
+    // Clear selection
+    select.selectedIndex = -1;
+}
+</script>
 
 {% if not_playing %}
 <div class="card">

@@ -1,11 +1,24 @@
 {% extends "base.html" %}
 
-{% block title %}Games - Football Tracker{% endblock %}
+{% block title %}Games - Wednesday Night FC{% endblock %}
 
 {% block content %}
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-    <h1>Recent Games</h1>
-    <a href="/games/add" class="btn btn-success">➕ Add New Game</a>
+    <h1>Upcoming Games</h1>
+    <div>
+        {% if is_admin %}
+            <a href="/admin" class="btn btn-success">Admin Panel</a>
+            <a href="/logout" class="btn">Logout</a>
+        {% else %}
+            <a href="/login" class="btn">Admin Login</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card" style="background: #e8f5e9; border-left: 4px solid #27ae60;">
+    <p style="margin: 0; color: #155724;">
+        <strong>📅 Weekly Schedule:</strong> Every Wednesday at 9pm • Selwood School
+    </p>
 </div>
 
 {% if games %}
@@ -13,22 +26,43 @@
     <table>
         <thead>
             <tr>
-                <th>Date:</th>
+                <th>Date</th>
                 <th>Location</th>
                 <th>Players</th>
-                <th>Notes</th>
+                <th>Score</th>
                 <th>Action</th>
             </tr>
         </thead>
         <tbody>
             {% for game in games %}
             <tr>
-                <td><strong>{{ game.date }}</strong></td>
+                <td><strong>{{ game.date|ukdate }}</strong></td>
                 <td>{{ game.location or 'N/A' }}</td>
                 <td><span class="badge badge-success">{{ game.players_count }} playing</span></td>
-                <td>{{ game.notes[:50] if game.notes else '' }}{{ '...' if game.notes and game.notes|length > 50 else '' }}</td>
                 <td>
-                    <a href="/games/{{ game.id }}" class="btn">View Details</a>
+                    {% if game.team1_score is not none and game.team2_score is not none %}
+                        <span style="font-weight: bold;">
+                            <span style="color: #e91e63;">{{ game.team1_score }}</span>
+                            -
+                            <span style="color: #ffc107;">{{ game.team2_score }}</span>
+                        </span>
+                        {% if game.team1_score > game.team2_score %}
+                            <span style="margin-left: 5px;">💗</span>
+                        {% elif game.team2_score > game.team1_score %}
+                            <span style="margin-left: 5px;">💛</span>
+                        {% else %}
+                            <span style="margin-left: 5px;">🤝</span>
+                        {% endif %}
+                    {% else %}
+                        <span style="color: #95a5a6;">-</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if is_admin %}
+                        <a href="/games/{{ game.id }}" class="btn">Manage</a>
+                    {% else %}
+                        <a href="/games/{{ game.id }}/teams" class="btn">View Teams</a>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}

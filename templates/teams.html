@@ -1,47 +1,106 @@
 {% extends "base.html" %}
 
-{% block title %}Team Generator - Football Tracker{% endblock %}
+{% block title %}Team Generator - Wednesday Night FC{% endblock %}
 
 {% block content %}
+{% if is_admin %}
 <a href="/games/{{ game.id }}" class="btn" style="margin-bottom: 20px;">← Back to Game</a>
+{% else %}
+<a href="/" class="btn" style="margin-bottom: 20px;">← Back to Games</a>
+{% endif %}
 
 <div class="card">
-    <h1>Balanced Teams for {{ game.date }}</h1>
+    <h1>Balanced Teams for {{ game.date|ukdate }}</h1>
     <p><strong>Location:</strong> {{ game.location or 'N/A' }}</p>
+    {% if game.team1_score is not none and game.team2_score is not none %}
+    <div style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 4px; text-align: center;">
+        <h2 style="margin: 0; font-size: 2em;">
+            <span style="color: #e91e63; font-weight: bold;">{{ game.team1_score }}</span>
+            <span style="color: #95a5a6; margin: 0 10px;">-</span>
+            <span style="color: #ffc107; font-weight: bold;">{{ game.team2_score }}</span>
+        </h2>
+        <p style="margin: 10px 0 0 0; color: #7f8c8d; font-size: 1.1em;">
+            {% if game.team1_score > game.team2_score %}
+                💗 Pink Team Wins! 🎉
+            {% elif game.team2_score > game.team1_score %}
+                💛 Yellow Team Wins! 🎉
+            {% else %}
+                🤝 Draw!
+            {% endif %}
+        </p>
+    </div>
+    {% endif %}
 </div>
 
-{% if error %}
+{% if not teams_generated %}
+<div class="card" style="text-align: center; padding: 40px;">
+    <h2 style="color: #7f8c8d; font-size: 1.5em;">⏳ Teams Not Generated Yet</h2>
+    <p style="color: #95a5a6; font-size: 1.1em; margin-top: 20px;">
+        Teams will be published closer to game time.
+    </p>
+    <p style="color: #95a5a6; margin-top: 10px;">
+        Check back later!
+    </p>
+</div>
+{% elif error %}
 <div class="alert alert-error">{{ error }}</div>
 {% else %}
 
+<div class="card">
+    <div style="margin-top: 15px;">
+        <button onclick="shareToWhatsApp()" class="btn btn-success">
+            📱 Share Teams to WhatsApp
+        </button>
+        <button onclick="shareToKeep()" class="btn" style="background-color: #607d8b;">
+            ⌚ Share to Keep
+        </button>
+    </div>
+</div>
+
 <div class="grid" style="grid-template-columns: repeat(2, 1fr);">
     <div class="card">
-        <h2 style="color: #3498db;">🔵 Team 1</h2>
+        <h2 style="color: #e91e63;">💗 Team 1</h2>
         <div class="stat">
             <div class="stat-value" style="font-size: 1.5em;">{{ team1|length }} players</div>
-            <div class="stat-label">Total Skill: {{ team1_skill }} • Avg: {{ "%.1f"|format(team1_avg) }}</div>
+            {% if is_admin %}
+            <div class="stat-label">
+                {% set team1_total = team1|sum(attribute='skill_rating', start=0) %}
+                {% set team1_avg = (team1_total / team1|length)|round(1) if team1|length > 0 else 0 %}
+                Total Skill: {{ team1_total }} | Avg: {{ team1_avg }}/5
+            </div>
+            {% endif %}
         </div>
         <ul style="list-style: none; padding: 0; margin-top: 20px;">
             {% for player in team1 %}
             <li style="padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
-                <span><strong>{{ player.name }}</strong></span>
-                <span class="badge badge-success">{{ player.skill_rating or 5 }}/10</span>
+                <strong>{% if is_admin %}{{ player.name|name_initial }}{% else %}{{ player.name.split()[0] }}{% endif %}</strong>
+                {% if is_admin %}
+                <span class="badge" style="background-color: #3498db; font-size: 0.85em;">{{ player.skill_rating or 3 }}/5</span>
+                {% endif %}
             </li>
             {% endfor %}
         </ul>
     </div>
     
     <div class="card">
-        <h2 style="color: #e74c3c;">🔴 Team 2</h2>
+        <h2 style="color: #ffc107;">💛 Team 2</h2>
         <div class="stat">
             <div class="stat-value" style="font-size: 1.5em;">{{ team2|length }} players</div>
-            <div class="stat-label">Total Skill: {{ team2_skill }} • Avg: {{ "%.1f"|format(team2_avg) }}</div>
+            {% if is_admin %}
+            <div class="stat-label">
+                {% set team2_total = team2|sum(attribute='skill_rating', start=0) %}
+                {% set team2_avg = (team2_total / team2|length)|round(1) if team2|length > 0 else 0 %}
+                Total Skill: {{ team2_total }} | Avg: {{ team2_avg }}/5
+            </div>
+            {% endif %}
         </div>
         <ul style="list-style: none; padding: 0; margin-top: 20px;">
             {% for player in team2 %}
             <li style="padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
-                <span><strong>{{ player.name }}</strong></span>
-                <span class="badge badge-success">{{ player.skill_rating or 5 }}/10</span>
+                <strong>{% if is_admin %}{{ player.name|name_initial }}{% else %}{{ player.name.split()[0] }}{% endif %}</strong>
+                {% if is_admin %}
+                <span class="badge" style="background-color: #3498db; font-size: 0.85em;">{{ player.skill_rating or 3 }}/5</span>
+                {% endif %}
             </li>
             {% endfor %}
         </ul>
@@ -49,23 +108,241 @@
 </div>
 
 <div class="card">
-    <h3>Team Balance</h3>
-    <p>
-        {% set diff = ((team1_skill - team2_skill)|abs) %}
-        {% if diff <= 2 %}
-            <span class="badge badge-success">Excellent balance! Skill difference: {{ "%.1f"|format(diff) }}</span>
-        {% elif diff <= 5 %}
-            <span class="badge badge-warning">Good balance. Skill difference: {{ "%.1f"|format(diff) }}</span>
-        {% else %}
-            <span class="badge badge-danger">Uneven teams. Skill difference: {{ "%.1f"|format(diff) }}</span>
-        {% endif %}
+    <p style="color: #7f8c8d;">
+        💡 Teams are balanced for fair play and saved. {% if is_admin %}Click "Regenerate" for a new split.{% endif %}
     </p>
-    <p style="margin-top: 10px; color: #7f8c8d;">
-        💡 Tip: Update player skill ratings to improve team balance. 
-        <a href="/players">Edit ratings →</a>
-    </p>
-    <a href="/games/{{ game.id }}/teams" class="btn" style="margin-top: 15px;">🔄 Regenerate Teams</a>
+    {% if is_admin %}
+    <form action="/games/{{ game.id }}/teams/regenerate" method="POST" style="margin-top: 15px;" onsubmit="return confirm('Generate new teams? This will replace the current teams.');">
+        <button type="submit" class="btn">🔄 Regenerate Teams</button>
+    </form>
+    {% else %}
+    <div style="margin-top: 20px; text-align: center;">
+        <button onclick="checkPaulWorldy()" class="btn" style="background: linear-gradient(45deg, #ff6b6b, #feca57); font-size: 1.1em; padding: 12px 24px; font-weight: bold;">
+            ⚽ Did Paul Score a Worldy? 🤔
+        </button>
+        <button onclick="whoBestAssist()" class="btn" style="margin-top: 10px; background: linear-gradient(45deg, #4caf50, #8bc34a); font-size: 1.1em; padding: 12px 24px; font-weight: bold;">
+            🎯 Who had the best assist?
+        </button>
+    </div>
+    {% endif %}
 </div>
+
+<!-- Worldy Result Modal -->
+<div id="worldyModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 9999; justify-content: center; align-items: center;" onclick="this.style.display='none'">
+    <div id="worldyContent" style="text-align: center; padding: 40px;" onclick="event.stopPropagation()">
+        <!-- Content will be injected here -->
+    </div>
+</div>
+
+<script>
+function checkPaulWorldy() {
+    const modal = document.getElementById('worldyModal');
+    const content = document.getElementById('worldyContent');
+    
+    // 10% chance of celebration (1 in 10)
+    const isWorldy = Math.random() < 0.1;
+    
+    if (isWorldy) {
+        // CELEBRATION! 🎉
+        content.innerHTML = `
+            <div style="animation: celebration 0.5s ease-in-out;">
+                <div style="font-size: 120px; margin-bottom: 20px;">🎉🎆🏆🎇🎊</div>
+                <h1 style="color: #feca57; font-size: 4em; text-shadow: 3px 3px 6px rgba(0,0,0,0.5); margin-bottom: 20px;">
+                    YES!!! WORLDY!!!
+                </h1>
+                <div style="font-size: 80px; margin: 30px 0;">🚀⚽✨</div>
+                <p style="color: white; font-size: 1.8em; margin-top: 20px;">
+                    Paul's done it! What a screamer! 🔥
+                </p>
+                <p style="color: #95a5a6; font-size: 1em; margin-top: 20px;">
+                    (Tap anywhere to close)
+                </p>
+            </div>
+        `;
+        // Add confetti effect
+        createConfetti();
+    } else {
+        // Disappointment 😔
+        const disappointments = [
+            { emoji: '😔', text: 'Not this time...' },
+            { emoji: '🤦‍♂️', text: 'Maybe next week!' },
+            { emoji: '😅', text: 'Nice try, Paul!' },
+            { emoji: '🙈', text: 'So close!' },
+            { emoji: '😬', text: 'Better luck next time!' },
+            { emoji: '🤷‍♂️', text: "Nah, didn't happen" },
+            { emoji: '😂', text: 'In his dreams!' }
+        ];
+        
+        const random = disappointments[Math.floor(Math.random() * disappointments.length)];
+        
+        content.innerHTML = `
+            <div>
+                <div style="font-size: 150px; margin-bottom: 20px;">${random.emoji}</div>
+                <h1 style="color: #95a5a6; font-size: 3em; margin-bottom: 20px;">
+                    ${random.text}
+                </h1>
+                <p style="color: #7f8c8d; font-size: 1.2em;">
+                    Paul's worldy remains elusive...
+                </p>
+                <p style="color: #95a5a6; font-size: 1em; margin-top: 30px;">
+                    (Tap anywhere to close)
+                </p>
+            </div>
+        `;
+    }
+    
+    modal.style.display = 'flex';
+}
+
+// Randomly pick a player for "best assist" fun prompt
+function whoBestAssist() {
+    const modal = document.getElementById('worldyModal');
+    const content = document.getElementById('worldyContent');
+    const players = [
+        {% for player in team1 %}'{% if is_admin %}{{ player.name|name_initial }}{% else %}{{ player.name.split()[0] }}{% endif %}',{% endfor %}
+        {% for player in team2 %}'{% if is_admin %}{{ player.name|name_initial }}{% else %}{{ player.name.split()[0] }}{% endif %}',{% endfor %}
+    ].filter(Boolean);
+
+    if (!players.length) {
+        content.innerHTML = '<h2 style="color: #fff;">No players yet!</h2>';
+        modal.style.display = 'flex';
+        return;
+    }
+
+    const picked = players[Math.floor(Math.random() * players.length)];
+    content.innerHTML = `
+        <div style="color: #fff;">
+            <div style="font-size: 100px; margin-bottom: 10px;">🎯</div>
+            <h1 style="font-size: 2.5em; margin-bottom: 10px;">Best Assist Award</h1>
+            <h2 style="font-size: 2em; margin-bottom: 10px;">goes to...</h2>
+            <h1 style="font-size: 3em; color: #8bc34a; margin-bottom: 20px;">${picked}!</h1>
+            <p style="font-size: 1.1em; color: #dfe6e9;">(Totally scientific random picker)</p>
+        </div>`;
+
+    modal.style.display = 'flex';
+}
+
+function createConfetti() {
+    const colors = ['#feca57', '#ff6b6b', '#48dbfb', '#1dd1a1', '#ff9ff3'];
+    const confettiCount = 100;
+    
+    for (let i = 0; i < confettiCount; i++) {
+        setTimeout(() => {
+            const confetti = document.createElement('div');
+            confetti.style.position = 'fixed';
+            confetti.style.width = '10px';
+            confetti.style.height = '10px';
+            confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+            confetti.style.left = Math.random() * 100 + '%';
+            confetti.style.top = '-10px';
+            confetti.style.opacity = '1';
+            confetti.style.transform = 'rotate(' + Math.random() * 360 + 'deg)';
+            confetti.style.zIndex = '10000';
+            confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
+            
+            document.body.appendChild(confetti);
+            
+            const animation = confetti.animate([
+                { transform: 'translateY(0px) rotate(0deg)', opacity: 1 },
+                { transform: `translateY(${window.innerHeight + 20}px) rotate(${Math.random() * 720}deg)`, opacity: 0 }
+            ], {
+                duration: 3000 + Math.random() * 2000,
+                easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+            });
+            
+            animation.onfinish = () => confetti.remove();
+        }, i * 30);
+    }
+}
+</script>
+
+<style>
+@keyframes celebration {
+    0% { transform: scale(0.5); opacity: 0; }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); opacity: 1; }
+}
+</style>
+
+{% if teams_generated %}
+<script>
+function getTeamsText() {
+    const date = '{{ game.date|ukdate }}';
+    const text = `⚽ Teams for ${date}
+📍 {{ game.location or 'Selwood School' }} - 9pm
+
+💗 TEAM 1 ({{ team1|length }} players)
+{% for player in team1 %}{{ loop.index }}. {% if is_admin %}{{ player.name|name_initial }}{% else %}{{ player.name.split()[0] }}{% endif %}
+{% endfor %}
+
+💛 TEAM 2 ({{ team2|length }} players)
+{% for player in team2 %}{{ loop.index }}. {% if is_admin %}{{ player.name|name_initial }}{% else %}{{ player.name.split()[0] }}{% endif %}
+{% endfor %}`;
+    
+    return text;
+}
+
+function shareToWhatsApp() {
+    const text = getTeamsText();
+    const encodedText = encodeURIComponent(text);
+    const whatsappUrl = `https://wa.me/?text=${encodedText}`;
+    window.open(whatsappUrl, '_blank');
+}
+
+function copyTeamsText() {
+    const text = getTeamsText();
+    
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => {
+            alert('✅ Teams copied to clipboard!');
+        }).catch(() => {
+            fallbackCopy(text);
+        });
+    } else {
+        fallbackCopy(text);
+    }
+}
+
+function fallbackCopy(text) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    
+    try {
+        document.execCommand('copy');
+        alert('✅ Teams copied to clipboard!');
+    } catch (err) {
+        alert('❌ Copy failed. Please copy manually.');
+    }
+    
+    document.body.removeChild(textarea);
+}
+
+function shareToKeep() {
+    const text = getTeamsText();
+    
+    // Try Web Share API (works on mobile)
+    if (navigator.share) {
+        navigator.share({
+            title: 'Teams for {{ game.date|ukdate }}',
+            text: text
+        }).then(() => {
+            console.log('Shared successfully');
+        }).catch((error) => {
+            // Fallback to copying
+            copyTeamsText();
+        });
+    } else {
+        // Desktop fallback
+        copyTeamsText();
+        alert('Teams copied! Now paste into Google Keep to sync to your watch.');
+    }
+}
+</script>
+{% endif %}
 
 {% endif %}
 {% endblock %}

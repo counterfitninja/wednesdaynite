@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Login - Football Tracker{% endblock %}
+
+{% block content %}
+<div style="max-width: 400px; margin: 100px auto;">
+    <div class="card">
+        <h1 style="text-align: center; margin-bottom: 30px;">🔐 Admin Login</h1>
+        
+        {% if error %}
+        <div class="alert alert-error">{{ error }}</div>
+        {% endif %}
+        
+        <form method="POST">
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required autofocus>
+            </div>
+            
+            <button type="submit" class="btn btn-success" style="width: 100%;">Login</button>
+        </form>
+        
+        <p style="text-align: center; margin-top: 20px; color: #7f8c8d;">
+            <a href="/">← Back to public view</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

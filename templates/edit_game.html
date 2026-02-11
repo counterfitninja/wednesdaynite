@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Game - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<a href="/admin/games" class="btn" style="margin-bottom: 20px;">← Back to Games</a>
+
+<div class="card">
+    <h1>Edit Game</h1>
+    
+    <form method="POST" action="/games/{{ game.id }}/edit">
+        <div class="form-group">
+            <label for="date">Date *</label>
+            <input type="date" id="date" name="date" value="{{ game.date }}" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="location">Location *</label>
+            <input type="text" id="location" name="location" value="{{ game.location }}" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="notes">Notes</label>
+            <textarea id="notes" name="notes">{{ game.notes or '' }}</textarea>
+        </div>
+        
+        <div class="grid" style="grid-template-columns: repeat(2, 1fr); gap: 20px;">
+            <div class="form-group">
+                <label for="team1_score">Team 1 (Pink) Score</label>
+                <input type="number" id="team1_score" name="team1_score" value="{{ game.team1_score or '' }}" min="0" placeholder="Optional">
+            </div>
+            
+            <div class="form-group">
+                <label for="team2_score">Team 2 (Yellow) Score</label>
+                <input type="number" id="team2_score" name="team2_score" value="{{ game.team2_score or '' }}" min="0" placeholder="Optional">
+            </div>
+        </div>
+        
+        <button type="submit" class="btn btn-success">💾 Save Changes</button>
+        <a href="/admin/games" class="btn">Cancel</a>
+    </form>
+</div>
+{% endblock %}

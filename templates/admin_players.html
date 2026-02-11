@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Players{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Admin - Manage Players</h1>
+    <div>
+        <a href="/admin/games" class="btn">Games</a>
+        <a href="/players/add" class="btn btn-success">➕ Add Player</a>
+        <button onclick="toggleMergeMode()" class="btn" style="background: #f39c12;">🔀 Merge Players</button>
+        <a href="/logout" class="btn">Logout</a>
+    </div>
+</div>
+
+<div id="merge-panel" class="card" style="display: none; background: #fff3cd; border-left: 4px solid #f39c12; margin-bottom: 20px;">
+    <h3 style="color: #856404;">🔀 Merge Players</h3>
+    <p style="color: #856404; margin-bottom: 15px;">Merge duplicate players (e.g., wrong spelling). All attendance records from the source player will be moved to the target player, then the source player will be deleted.</p>
+    <form method="POST" action="/players/merge" onsubmit="return confirmMerge();">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+            <div class="form-group">
+                <label style="color: #856404;"><strong>Source Player (will be deleted)</strong></label>
+                <select name="source_player_id" required style="width: 100%; padding: 8px;">
+                    <option value="">Select player to merge from...</option>
+                    {% for player in players %}
+                    <option value="{{ player.id }}">{{ player.name }} ({{ player.games_played }} games)</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label style="color: #856404;"><strong>Target Player (will be kept)</strong></label>
+                <select name="target_player_id" required style="width: 100%; padding: 8px;">
+                    <option value="">Select player to merge into...</option>
+                    {% for player in players %}
+                    <option value="{{ player.id }}">{{ player.name }} ({{ player.games_played }} games)</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button type="submit" class="btn" style="background: #27ae60;">✓ Merge Players</button>
+            <button type="button" onclick="toggleMergeMode()" class="btn" style="background: #95a5a6;">Cancel</button>
+        </div>
+    </form>
+</div>
+
+<script>
+function toggleMergeMode() {
+    const panel = document.getElementById('merge-panel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function confirmMerge() {
+    const sourceSelect = document.querySelector('select[name="source_player_id"]');
+    const targetSelect = document.querySelector('select[name="target_player_id"]');
+    const sourceName = sourceSelect.options[sourceSelect.selectedIndex].text;
+    const targetName = targetSelect.options[targetSelect.selectedIndex].text;
+    
+    if (sourceSelect.value === targetSelect.value) {
+        alert('❌ Cannot merge a player with itself. Please select different players.');
+        return false;
+    }
+    
+    return confirm(`Are you sure you want to merge:\n\n"${sourceName}" → "${targetName}"\n\nThis will:\n• Move all attendance records to ${targetName}\n• Delete ${sourceName}\n\nThis action cannot be undone.`);
+}
+</script>
+
+{% if players %}
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Skill Rating</th>
+                <th>Games Played</th>
+                <th>Total Games</th>
+                <th>Attendance Rate</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for player in players %}
+            <tr>
+                <td><strong>{{ player.name }}</strong></td>
+                <td>{{ player.phone or 'N/A' }}</td>
+                <td>
+                    <span class="badge" style="background-color: #3498db;">{{ player.skill_rating or 3 }}/5</span>
+                </td>
+                <td><strong>{{ player.games_played }}</strong></td>
+                <td>{{ player.total_games }}</td>
+                <td>
+                    {% if player.attendance_rate >= 75 %}
+                        <span class="badge badge-success">{{ "%.1f"|format(player.attendance_rate) }}%</span>
+                    {% elif player.attendance_rate >= 50 %}
+                        <span class="badge badge-warning">{{ "%.1f"|format(player.attendance_rate) }}%</span>
+                    {% else %}
+                        <span class="badge badge-danger">{{ "%.1f"|format(player.attendance_rate) }}%</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="/players/{{ player.id }}/edit" class="btn" style="padding: 5px 10px; font-size: 0.9em; margin-right: 5px;">Edit</a>
+                    <form action="/players/{{ player.id }}/delete" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete {{ player.name }}? This will also delete all their attendance records.');">
+                        <button type="submit" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.9em;">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card">
+    <p>No players registered yet. <a href="/players/add">Add your first player</a>!</p>
+</div>
+{% endif %}
+{% endblock %}

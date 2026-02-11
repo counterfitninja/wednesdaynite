@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<a href="/admin/games" class="btn" style="margin-bottom: 20px;">← Back to Admin</a>
+
+<div class="card">
+    <h1>⚙️ Settings</h1>
+    <p style="color: #7f8c8d;">Configure app notifications and preferences</p>
+</div>
+
+<div class="card">
+    <h2>🔔 Notification Settings</h2>
+    
+    <form method="POST">
+        <div style="margin-bottom: 20px;">
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 2px solid #e0e0e0;">
+                <input type="checkbox" name="notifications_enabled" {% if notifications_enabled %}checked{% endif %} 
+                       style="width: 24px; height: 24px; cursor: pointer;">
+                <div>
+                    <strong style="display: block; font-size: 16px; margin-bottom: 5px;">
+                        Enable Wednesday Lunchtime Reminders
+                    </strong>
+                    <span style="color: #7f8c8d; font-size: 14px;">
+                        Send push notifications every Wednesday at 12:00 PM to remind you to set up the game poll
+                    </span>
+                </div>
+            </label>
+        </div>
+        
+        <button type="submit" class="btn btn-primary" style="width: 100%;">
+            💾 Save Settings
+        </button>
+    </form>
+    
+    <div style="margin-top: 30px; padding: 20px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+        <strong style="color: #856404;">ℹ️ Note:</strong>
+        <p style="color: #856404; margin: 10px 0 0 0; font-size: 14px;">
+            Users must still grant notification permission in their browser. 
+            This setting controls whether the app will attempt to send reminders.
+        </p>
+    </div>
+    
+    <div style="margin-top: 20px; text-align: center;">
+        <button id="notification-btn" style="display: none; padding: 12px 24px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold;" onclick="notificationManager.requestNotificationPermission().then(granted => { if(granted) alert('✅ Notifications enabled! You will be reminded on Wednesday lunchtimes.'); else alert('❌ Please enable notifications in your browser settings.'); })">
+            🔔 Enable Browser Notifications
+        </button>
+    </div>
+    
+    <script>
+        // Check if notifications are enabled and show button accordingly
+        fetch('/api/settings/notifications')
+            .then(r => r.json())
+            .then(data => {
+                if (data.enabled) {
+                    document.getElementById('notification-btn').style.display = 'inline-block';
+                }
+            })
+            .catch(err => console.error('Failed to check notification settings:', err));
+    </script>
+</div>
+
+<div class="card">
+    <h3>📊 Current Status</h3>
+    <div class="grid" style="grid-template-columns: 1fr 1fr;">
+        <div class="stat">
+            <div class="stat-label">Notifications</div>
+            <div class="stat-value" style="color: {% if notifications_enabled %}#27ae60{% else %}#e74c3c{% endif %};">
+                {% if notifications_enabled %}
+                ✅ Enabled
+                {% else %}
+                ❌ Disabled
+                {% endif %}
+            </div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">Reminder Time</div>
+            <div class="stat-value" style="color: #3498db; font-size: 1.5em;">
+                Wed 12:00 PM
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Win Leaderboard - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<a href="/" class="btn" style="margin-bottom: 20px;">← Back to Games</a>
+
+<div class="card">
+    <h1>🏆 Win Leaderboard</h1>
+    <p style="color: #7f8c8d;">Players with most wins this year</p>
+</div>
+
+<div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+    <button onclick="showLeaderboard('wins')" id="btn-wins" class="btn" style="background: #27ae60;">🏆 Wins</button>
+    <button onclick="showLeaderboard('attendance')" id="btn-attendance" class="btn" style="background: #3498db;">📊 Attendance</button>
+</div>
+
+<script>
+function showLeaderboard(type) {
+    document.getElementById('leaderboard-wins').style.display = type === 'wins' ? 'block' : 'none';
+    document.getElementById('leaderboard-attendance').style.display = type === 'attendance' ? 'block' : 'none';
+    
+    // Update button styles
+    document.getElementById('btn-wins').style.background = type === 'wins' ? '#27ae60' : '#95a5a6';
+    document.getElementById('btn-attendance').style.background = type === 'attendance' ? '#3498db' : '#95a5a6';
+}
+</script>
+
+{% if leaderboard %}
+<div id="leaderboard-wins" class="card">
+    <h2>🏆 Win Leaderboard {{ year }}</h2>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 60px;">Rank</th>
+                <th>Player</th>
+                <th style="text-align: center;">Wins</th>
+                <th style="text-align: center;">Draws</th>
+                <th style="text-align: center;">Losses</th>
+                <th style="text-align: center;">Games</th>
+                <th style="text-align: center;">Win %</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for player in leaderboard %}
+            <tr>
+                <td style="text-align: center;">
+                    {% if loop.index == 1 %}
+                    <span style="font-size: 1.5em;">🥇</span>
+                    {% elif loop.index == 2 %}
+                    <span style="font-size: 1.5em;">🥈</span>
+                    {% elif loop.index == 3 %}
+                    <span style="font-size: 1.5em;">🥉</span>
+                    {% else %}
+                    <strong>#{{ loop.index }}</strong>
+                    {% endif %}
+                </td>
+                <td><strong>{{ player.name|name_initial }}</strong></td>
+                <td style="text-align: center;">
+                    <span class="badge badge-success">{{ player.wins }}</span>
+                </td>
+                <td style="text-align: center;">
+                    <span class="badge" style="background-color: #95a5a6;">{{ player.draws }}</span>
+                </td>
+                <td style="text-align: center;">
+                    <span class="badge badge-danger">{{ player.losses }}</span>
+                </td>
+                <td style="text-align: center;">{{ player.total_games }}</td>
+                <td style="text-align: center;">
+                    <strong style="color: #3498db;">{{ player.win_percentage }}%</strong>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div id="leaderboard-attendance" class="card" style="display: none;">
+    <h2>📊 Attendance Leaderboard {{ year }}</h2>
+    {% if attendance_leaderboard %}
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 60px;">Rank</th>
+                <th>Player</th>
+                <th style="text-align: center;">Games Played</th>
+                <th style="text-align: center;">Attendance %</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for player in attendance_leaderboard %}
+            <tr>
+                <td style="text-align: center;">
+                    {% if loop.index == 1 %}
+                    <span style="font-size: 1.5em;">🥇</span>
+                    {% elif loop.index == 2 %}
+                    <span style="font-size: 1.5em;">🥈</span>
+                    {% elif loop.index == 3 %}
+                    <span style="font-size: 1.5em;">🥉</span>
+                    {% else %}
+                    <strong>#{{ loop.index }}</strong>
+                    {% endif %}
+                </td>
+                <td><strong>{{ player.name|name_initial }}</strong></td>
+                <td style="text-align: center;">
+                    <span class="badge" style="background-color: #3498db;">{{ player.games_played }}</span>
+                </td>
+                <td style="text-align: center;">
+                    {% if player.attendance_rate >= 75 %}
+                        <span class="badge badge-success">{{ player.attendance_rate }}%</span>
+                    {% elif player.attendance_rate >= 50 %}
+                        <span class="badge badge-warning">{{ player.attendance_rate }}%</span>
+                    {% else %}
+                        <span class="badge badge-danger">{{ player.attendance_rate }}%</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; color: #7f8c8d; padding: 40px;">
+        No attendance data recorded yet.
+    </p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h3>📊 Statistics</h3>
+    <div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+        <div class="stat">
+            <div class="stat-value" style="color: #27ae60;">{{ total_games }}</div>
+            <div class="stat-label">Games with Scores</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" style="color: #3498db;">{{ total_players }}</div>
+            <div class="stat-label">Players Tracked</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" style="color: #f39c12;">{{ year }}</div>
+            <div class="stat-label">Year</div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<div class="card">
+    <p style="text-align: center; color: #7f8c8d; padding: 40px;">
+        No game scores recorded yet.<br>
+        Admins can add scores by editing games.
+    </p>
+</div>
+{% endif %}
+
+{% endblock %}

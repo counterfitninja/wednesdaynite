@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Players - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Players</h1>
+    <div>
+        <a href="/login" class="btn">Admin Login</a>
+    </div>
+</div>
+
+{% if players %}
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for player in players %}
+            <tr>
+                <td><strong>{{ player.name.split()[0] }}</strong></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card">
+    <p>No players registered yet.</p>
+</div>
+{% endif %}
+{% endblock %}
