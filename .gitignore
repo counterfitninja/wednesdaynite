@@ -1,0 +1,22 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Local tooling/cache directories
+.cache/
+.local/
+.vscode/
+
+# SQLite local data
+football.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# OS/editor artifacts
+.DS_Store
+Thumbs.db
