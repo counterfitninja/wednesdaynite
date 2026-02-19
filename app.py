@@ -350,8 +350,14 @@ def admin_games():
 @login_required
 def admin_players():
     with get_db() as conn:
-        # Attendance denominator is player-specific responded games
-        # (any status), excluding abandoned matches.
+        total_games_count = conn.execute("""
+            SELECT COUNT(*) as count
+            FROM games
+            WHERE date <= date('now')
+                AND (is_abandoned IS NULL OR is_abandoned = 0)
+        """).fetchone()['count']
+
+        # Attendance denominator is all non-abandoned past games.
         players = conn.execute('''
             SELECT 
                 p.id,
@@ -365,24 +371,14 @@ def admin_players():
                         AND g.date <= date('now')
                         AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
                     THEN a.game_id END) as games_played,
-                COUNT(DISTINCT CASE
-                    WHEN g.date <= date('now')
-                        AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
-                    THEN a.game_id END) as total_games,
+                ? as total_games,
                 CASE 
-                    WHEN COUNT(DISTINCT CASE
-                        WHEN g.date <= date('now')
-                            AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
-                        THEN a.game_id END) > 0 
+                    WHEN ? > 0 
                     THEN ROUND((COUNT(DISTINCT CASE
                         WHEN a.status = 'playing'
                             AND g.date <= date('now')
                             AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
-                        THEN a.game_id END) * 100.0 /
-                        COUNT(DISTINCT CASE
-                            WHEN g.date <= date('now')
-                                AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
-                            THEN a.game_id END)), 1)
+                        THEN a.game_id END) * 100.0 / ?), 1)
                     ELSE 0 
                 END as attendance_rate
             FROM players p
@@ -390,7 +386,7 @@ def admin_players():
             LEFT JOIN games g ON a.game_id = g.id
             GROUP BY p.id, p.name, p.alias, p.phone, p.email, p.skill_rating
             ORDER BY p.name
-        ''').fetchall()
+        ''', (total_games_count, total_games_count, total_games_count)).fetchall()
     return render_template('admin_players.html', players=players)
 
 @app.route('/admin/settings', methods=['GET', 'POST'])
@@ -538,8 +534,16 @@ def leaderboard():
                 AND strftime('%Y', date) = ?
         ''', (str(current_year),)).fetchone()['count']
         
+        total_games_year = conn.execute('''
+            SELECT COUNT(*) as count
+            FROM games
+            WHERE date <= date('now')
+                AND (is_abandoned IS NULL OR is_abandoned = 0)
+                AND strftime('%Y', date) = ?
+        ''', (str(current_year),)).fetchone()['count']
+
         # Attendance leaderboard for current year.
-        # Denominator is responded games in the year (any status), excluding abandoned.
+        # Denominator is all non-abandoned games in the year.
         attendance_data = conn.execute('''
             SELECT 
                 p.id,
@@ -550,28 +554,15 @@ def leaderboard():
                         AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
                         AND strftime('%Y', g.date) = ?
                     THEN a.game_id END) as games_played,
-                COUNT(DISTINCT CASE
-                    WHEN g.date <= date('now')
-                        AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
-                        AND strftime('%Y', g.date) = ?
-                    THEN a.game_id END) as total_games,
+                ? as total_games,
                 CASE 
-                    WHEN COUNT(DISTINCT CASE
-                        WHEN g.date <= date('now')
-                            AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
-                            AND strftime('%Y', g.date) = ?
-                        THEN a.game_id END) > 0 
+                    WHEN ? > 0 
                     THEN ROUND(COUNT(DISTINCT CASE
                         WHEN a.status = 'playing'
                             AND g.date <= date('now')
                             AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
                             AND strftime('%Y', g.date) = ?
-                        THEN a.game_id END) * 100.0 /
-                        COUNT(DISTINCT CASE
-                            WHEN g.date <= date('now')
-                                AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
-                                AND strftime('%Y', g.date) = ?
-                            THEN a.game_id END), 1)
+                        THEN a.game_id END) * 100.0 / ?, 1)
                     ELSE 0 
                 END as attendance_rate
             FROM players p
@@ -579,7 +570,7 @@ def leaderboard():
             LEFT JOIN games g ON a.game_id = g.id
             GROUP BY p.id, p.name
             ORDER BY attendance_rate DESC, games_played DESC, p.name
-        ''', (str(current_year), str(current_year), str(current_year), str(current_year), str(current_year))).fetchall()
+        ''', (str(current_year), total_games_year, total_games_year, str(current_year), total_games_year)).fetchall()
     
     return render_template('leaderboard.html', 
                          leaderboard=leaderboard,
