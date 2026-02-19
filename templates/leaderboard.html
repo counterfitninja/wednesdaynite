@@ -16,34 +16,184 @@
 </div>
 
 <script>
+const winsSortState = {
+    column: 'wins',
+    dir: 'desc'
+};
+
+const attendanceSortState = {
+    column: 'attendance_rate',
+    dir: 'desc'
+};
+
 function showLeaderboard(type) {
     document.getElementById('leaderboard-wins').style.display = type === 'wins' ? 'block' : 'none';
     document.getElementById('leaderboard-attendance').style.display = type === 'attendance' ? 'block' : 'none';
     
-    // Update button styles
     document.getElementById('btn-wins').style.background = type === 'wins' ? '#27ae60' : '#95a5a6';
     document.getElementById('btn-attendance').style.background = type === 'attendance' ? '#3498db' : '#95a5a6';
 }
+
+function updateWinsRankDisplay(rows) {
+    rows.forEach((row, index) => {
+        const rankCell = row.children[0];
+        const rank = index + 1;
+
+        if (rank === 1) {
+            rankCell.innerHTML = '<span style="font-size: 1.5em;">🥇</span>';
+        } else if (rank === 2) {
+            rankCell.innerHTML = '<span style="font-size: 1.5em;">🥈</span>';
+        } else if (rank === 3) {
+            rankCell.innerHTML = '<span style="font-size: 1.5em;">🥉</span>';
+        } else {
+            rankCell.innerHTML = `<strong>#${rank}</strong>`;
+        }
+    });
+}
+
+function updateAttendanceRankDisplay(rows) {
+    rows.forEach((row, index) => {
+        const rankCell = row.children[0];
+        const rank = index + 1;
+
+        if (rank === 1) {
+            rankCell.innerHTML = '<span style="font-size: 1.5em;">🥇</span>';
+        } else if (rank === 2) {
+            rankCell.innerHTML = '<span style="font-size: 1.5em;">🥈</span>';
+        } else if (rank === 3) {
+            rankCell.innerHTML = '<span style="font-size: 1.5em;">🥉</span>';
+        } else {
+            rankCell.innerHTML = `<strong>#${rank}</strong>`;
+        }
+    });
+}
+
+function updateWinsSortIndicators() {
+    document.querySelectorAll('[data-sort-col]').forEach(header => {
+        const indicator = header.querySelector('.sort-indicator');
+        if (!indicator) {
+            return;
+        }
+
+        if (header.dataset.sortCol === winsSortState.column) {
+            indicator.textContent = winsSortState.dir === 'desc' ? ' ↓' : ' ↑';
+        } else {
+            indicator.textContent = '';
+        }
+    });
+}
+
+function updateAttendanceSortIndicators() {
+    document.querySelectorAll('[data-attendance-sort-col]').forEach(header => {
+        const indicator = header.querySelector('.attendance-sort-indicator');
+        if (!indicator) {
+            return;
+        }
+
+        if (header.dataset.attendanceSortCol === attendanceSortState.column) {
+            indicator.textContent = attendanceSortState.dir === 'desc' ? ' ↓' : ' ↑';
+        } else {
+            indicator.textContent = '';
+        }
+    });
+}
+
+function sortWinsTable(column) {
+    const tbody = document.getElementById('wins-tbody');
+    if (!tbody) {
+        return;
+    }
+
+    const sameColumn = winsSortState.column === column;
+    winsSortState.dir = sameColumn && winsSortState.dir === 'desc' ? 'asc' : 'desc';
+    winsSortState.column = column;
+
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const numericColumns = ['wins', 'draws', 'losses', 'total_games', 'win_percentage'];
+
+    rows.sort((a, b) => {
+        const rawA = a.dataset[column] || '';
+        const rawB = b.dataset[column] || '';
+        let comparison = 0;
+
+        if (numericColumns.includes(column)) {
+            comparison = parseFloat(rawA) - parseFloat(rawB);
+        } else {
+            comparison = rawA.localeCompare(rawB);
+        }
+
+        if (comparison === 0 && column !== 'name') {
+            comparison = (a.dataset.name || '').localeCompare(b.dataset.name || '');
+        }
+
+        return winsSortState.dir === 'desc' ? -comparison : comparison;
+    });
+
+    rows.forEach(row => tbody.appendChild(row));
+    updateWinsRankDisplay(rows);
+    updateWinsSortIndicators();
+}
+
+function sortAttendanceTable(column) {
+    const tbody = document.getElementById('attendance-tbody');
+    if (!tbody) {
+        return;
+    }
+
+    const sameColumn = attendanceSortState.column === column;
+    attendanceSortState.dir = sameColumn && attendanceSortState.dir === 'desc' ? 'asc' : 'desc';
+    attendanceSortState.column = column;
+
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const numericColumns = ['games_played', 'attendance_rate'];
+
+    rows.sort((a, b) => {
+        const rawA = a.dataset[column] || '';
+        const rawB = b.dataset[column] || '';
+        let comparison = 0;
+
+        if (numericColumns.includes(column)) {
+            comparison = parseFloat(rawA) - parseFloat(rawB);
+        } else {
+            comparison = rawA.localeCompare(rawB);
+        }
+
+        if (comparison === 0 && column !== 'name') {
+            comparison = (a.dataset.name || '').localeCompare(b.dataset.name || '');
+        }
+
+        return attendanceSortState.dir === 'desc' ? -comparison : comparison;
+    });
+
+    rows.forEach(row => tbody.appendChild(row));
+    updateAttendanceRankDisplay(rows);
+    updateAttendanceSortIndicators();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    updateWinsSortIndicators();
+    updateAttendanceSortIndicators();
+});
 </script>
 
 {% if leaderboard %}
 <div id="leaderboard-wins" class="card">
     <h2>🏆 Win Leaderboard {{ year }}</h2>
-    <table>
+    <table id="wins-table">
         <thead>
             <tr>
                 <th style="width: 60px;">Rank</th>
-                <th>Player</th>
-                <th style="text-align: center;">Wins</th>
-                <th style="text-align: center;">Draws</th>
-                <th style="text-align: center;">Losses</th>
-                <th style="text-align: center;">Games</th>
-                <th style="text-align: center;">Win %</th>
+                <th data-sort-col="name" onclick="sortWinsTable('name')" style="cursor: pointer; user-select: none;">Player<span class="sort-indicator"></span></th>
+                <th data-sort-col="wins" onclick="sortWinsTable('wins')" style="text-align: center; cursor: pointer; user-select: none;">Wins<span class="sort-indicator"></span></th>
+                <th data-sort-col="draws" onclick="sortWinsTable('draws')" style="text-align: center; cursor: pointer; user-select: none;">Draws<span class="sort-indicator"></span></th>
+                <th data-sort-col="losses" onclick="sortWinsTable('losses')" style="text-align: center; cursor: pointer; user-select: none;">Losses<span class="sort-indicator"></span></th>
+                <th data-sort-col="total_games" onclick="sortWinsTable('total_games')" style="text-align: center; cursor: pointer; user-select: none;">Games<span class="sort-indicator"></span></th>
+                <th data-sort-col="win_percentage" onclick="sortWinsTable('win_percentage')" style="text-align: center; cursor: pointer; user-select: none;">Win %<span class="sort-indicator"></span></th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="wins-tbody">
             {% for player in leaderboard %}
-            <tr>
+            <tr data-name="{{ player.name|name_initial }}" data-wins="{{ player.wins }}" data-draws="{{ player.draws }}" data-losses="{{ player.losses }}" data-total_games="{{ player.total_games }}" data-win_percentage="{{ player.win_percentage }}">
                 <td style="text-align: center;">
                     {% if loop.index == 1 %}
                     <span style="font-size: 1.5em;">🥇</span>
@@ -82,14 +232,14 @@ function showLeaderboard(type) {
         <thead>
             <tr>
                 <th style="width: 60px;">Rank</th>
-                <th>Player</th>
-                <th style="text-align: center;">Games Played</th>
-                <th style="text-align: center;">Attendance %</th>
+                <th data-attendance-sort-col="name" onclick="sortAttendanceTable('name')" style="cursor: pointer; user-select: none;">Player<span class="attendance-sort-indicator"></span></th>
+                <th data-attendance-sort-col="games_played" onclick="sortAttendanceTable('games_played')" style="text-align: center; cursor: pointer; user-select: none;">Games Played<span class="attendance-sort-indicator"></span></th>
+                <th data-attendance-sort-col="attendance_rate" onclick="sortAttendanceTable('attendance_rate')" style="text-align: center; cursor: pointer; user-select: none;">Attendance %<span class="attendance-sort-indicator"></span></th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="attendance-tbody">
             {% for player in attendance_leaderboard %}
-            <tr>
+            <tr data-name="{{ player.name|name_initial }}" data-games_played="{{ player.games_played }}" data-attendance_rate="{{ player.attendance_rate }}">
                 <td style="text-align: center;">
                     {% if loop.index == 1 %}
                     <span style="font-size: 1.5em;">🥇</span>

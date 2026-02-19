@@ -10,6 +10,7 @@ This project loosely follows Keep a Changelog format and Semantic Versioning pri
 - Added admin game status filter (`All / Active / Abandoned`).
 - Rewrote and expanded project README for accurate setup and operations.
 - Added operational docs: release checklist and changelog.
+- Added client-side sortable columns for wins and attendance leaderboard tables.
 
 ### Changed
 - Excluded abandoned games from leaderboard and attendance statistics.
