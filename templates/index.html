@@ -38,9 +38,17 @@
             <tr>
                 <td><strong>{{ game.date|ukdate }}</strong></td>
                 <td>{{ game.location or 'N/A' }}</td>
-                <td><span class="badge badge-success">{{ game.players_count }} playing</span></td>
                 <td>
-                    {% if game.team1_score is not none and game.team2_score is not none %}
+                    {% if game.is_abandoned %}
+                        <span class="badge" style="background-color: #7f8c8d;">Abandoned</span>
+                    {% else %}
+                        <span class="badge badge-success">{{ game.players_count }} playing</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if game.is_abandoned %}
+                        <span style="color: #7f8c8d; font-weight: 600;">Abandoned</span>
+                    {% elif game.team1_score is not none and game.team2_score is not none %}
                         <span style="font-weight: bold;">
                             <span style="color: #e91e63;">{{ game.team1_score }}</span>
                             -

@@ -5,7 +5,7 @@
 {% block content %}
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
     <a href="/" class="btn">← Back to Games</a>
-    {% if playing|length >= 2 %}
+    {% if playing|length >= 2 and not game.is_abandoned %}
     <div>
         <a href="/games/{{ game.id }}/teams" class="btn btn-success">🎲 Generate Balanced Teams</a>
         <a href="/games/{{ game.id }}/teams/manual" class="btn" style="background-color: #9b59b6;">✏️ Manual Teams</a>
@@ -16,6 +16,9 @@
 <div class="card">
     <h1>Game on {{ game.date|ukdate }}</h1>
     <p><strong>Location:</strong> {{ game.location or 'N/A' }}</p>
+    {% if game.is_abandoned %}
+    <p><strong>Status:</strong> <span class="badge" style="background-color: #7f8c8d;">Abandoned</span></p>
+    {% endif %}
     {% if game.notes %}
     <p><strong>Notes:</strong> {{ game.notes }}</p>
     {% endif %}
@@ -36,6 +39,7 @@
     </div>
 </div>
 
+{% if not game.is_abandoned %}
 <div class="card">
     <h2>Record Attendance</h2>
     
@@ -92,6 +96,11 @@
         <button type="submit" class="btn btn-success">Record Attendance</button>
     </form>
 </div>
+{% else %}
+<div class="card" style="background: #f8f9fa; border-left: 4px solid #7f8c8d;">
+    <p style="margin: 0; color: #555;"><strong>Match abandoned:</strong> attendance and score updates are disabled for this game.</p>
+</div>
+{% endif %}
 
 {% if playing %}
 <div class="card">

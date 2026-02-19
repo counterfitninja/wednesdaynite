@@ -30,7 +30,9 @@ def inject_build_version():
         with get_db() as conn:
             latest_pending = conn.execute('''
                 SELECT id FROM games
-                WHERE date <= date('now') AND (team1_score IS NULL OR team2_score IS NULL)
+                WHERE date <= date('now')
+                    AND (is_abandoned IS NULL OR is_abandoned = 0)
+                    AND (team1_score IS NULL OR team2_score IS NULL)
                 ORDER BY date DESC
                 LIMIT 1
             ''').fetchone()
@@ -38,6 +40,7 @@ def inject_build_version():
             latest_completed = conn.execute('''
                 SELECT id FROM games
                 WHERE date <= date('now')
+                    AND (is_abandoned IS NULL OR is_abandoned = 0)
                 ORDER BY date DESC
                 LIMIT 1
             ''').fetchone()
@@ -127,6 +130,7 @@ def init_db():
                 notes TEXT,
                 team1_score INTEGER,
                 team2_score INTEGER,
+                is_abandoned INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -200,6 +204,13 @@ def init_db():
             conn.execute('ALTER TABLE games ADD COLUMN team2_score INTEGER')
         except sqlite3.OperationalError:
             pass  # Column already exists
+
+        try:
+            conn.execute('ALTER TABLE games ADD COLUMN is_abandoned INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        conn.execute('UPDATE games SET is_abandoned = 0 WHERE is_abandoned IS NULL')
 
         # Ensure default alias for known mapping
         conn.execute("UPDATE players SET alias = 'you' WHERE name = 'Dave Bird' AND (alias IS NULL OR alias = '')")
@@ -280,7 +291,8 @@ def index():
                 'notes': game['notes'],
                 'players_count': attendance['count'] if attendance else 0,
                 'team1_score': team1_score,
-                'team2_score': team2_score
+                'team2_score': team2_score,
+                'is_abandoned': game['is_abandoned'] if 'is_abandoned' in game.keys() else 0
             })
     
     return render_template('index.html', games=game_data, is_admin=session.get('logged_in'))
@@ -293,8 +305,27 @@ def admin():
 @app.route('/admin/games')
 @login_required
 def admin_games():
+    status_filter = request.args.get('status', 'all')
+    if status_filter not in ('all', 'active', 'abandoned'):
+        status_filter = 'all'
+
     with get_db() as conn:
-        games = conn.execute('SELECT * FROM games ORDER BY date DESC LIMIT 20').fetchall()
+        if status_filter == 'active':
+            games = conn.execute('''
+                SELECT * FROM games
+                WHERE is_abandoned = 0 OR is_abandoned IS NULL
+                ORDER BY date DESC
+                LIMIT 20
+            ''').fetchall()
+        elif status_filter == 'abandoned':
+            games = conn.execute('''
+                SELECT * FROM games
+                WHERE is_abandoned = 1
+                ORDER BY date DESC
+                LIMIT 20
+            ''').fetchall()
+        else:
+            games = conn.execute('SELECT * FROM games ORDER BY date DESC LIMIT 20').fetchall()
         
         game_data = []
         for game in games:
@@ -309,17 +340,23 @@ def admin_games():
                 'date': game['date'],
                 'location': game['location'],
                 'notes': game['notes'],
-                'players_count': attendance['count'] if attendance else 0
+                'players_count': attendance['count'] if attendance else 0,
+                'is_abandoned': game['is_abandoned'] if 'is_abandoned' in game.keys() else 0
             })
     
-    return render_template('admin_games.html', games=game_data)
+    return render_template('admin_games.html', games=game_data, status_filter=status_filter)
 
 @app.route('/admin/players')
 @login_required
 def admin_players():
     with get_db() as conn:
         # Get total number of games (excluding future games)
-        total_games_count = conn.execute("SELECT COUNT(*) as count FROM games WHERE date <= date('now')").fetchone()['count']
+        total_games_count = conn.execute("""
+            SELECT COUNT(*) as count
+            FROM games
+            WHERE date <= date('now')
+                AND (is_abandoned IS NULL OR is_abandoned = 0)
+        """).fetchone()['count']
         
         # Get player data with attendance statistics
         players = conn.execute('''
@@ -330,11 +367,19 @@ def admin_players():
                 p.phone,
                 p.email,
                 p.skill_rating,
-                COUNT(DISTINCT CASE WHEN a.status = 'playing' AND g.date <= date('now') THEN a.game_id END) as games_played,
+                COUNT(DISTINCT CASE
+                    WHEN a.status = 'playing'
+                        AND g.date <= date('now')
+                        AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+                    THEN a.game_id END) as games_played,
                 ? as total_games,
                 CASE 
                     WHEN ? > 0 
-                    THEN ROUND((COUNT(DISTINCT CASE WHEN a.status = 'playing' AND g.date <= date('now') THEN a.game_id END) * 100.0 / ?), 1)
+                    THEN ROUND((COUNT(DISTINCT CASE
+                        WHEN a.status = 'playing'
+                            AND g.date <= date('now')
+                            AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+                        THEN a.game_id END) * 100.0 / ?), 1)
                     ELSE 0 
                 END as attendance_rate
             FROM players p
@@ -418,7 +463,9 @@ def leaderboard():
     with get_db() as conn:
         latest_pending = conn.execute('''
             SELECT id, date FROM games
-            WHERE date <= date('now') AND (team1_score IS NULL OR team2_score IS NULL)
+            WHERE date <= date('now')
+                AND (is_abandoned IS NULL OR is_abandoned = 0)
+                AND (team1_score IS NULL OR team2_score IS NULL)
             ORDER BY date DESC
             LIMIT 1
         ''').fetchone()
@@ -426,6 +473,7 @@ def leaderboard():
         latest_completed = conn.execute('''
             SELECT id, date FROM games
             WHERE date <= date('now')
+                AND (is_abandoned IS NULL OR is_abandoned = 0)
             ORDER BY date DESC
             LIMIT 1
         ''').fetchone()
@@ -457,6 +505,7 @@ def leaderboard():
             JOIN games g ON ta.game_id = g.id
             WHERE g.team1_score IS NOT NULL 
                 AND g.team2_score IS NOT NULL
+                AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
                 AND strftime('%Y', g.date) = ?
             GROUP BY p.id, p.name
             HAVING total_games > 0
@@ -482,6 +531,7 @@ def leaderboard():
             FROM games 
             WHERE team1_score IS NOT NULL 
                 AND team2_score IS NOT NULL
+                AND (is_abandoned IS NULL OR is_abandoned = 0)
                 AND strftime('%Y', date) = ?
         ''', (str(current_year),)).fetchone()['count']
         
@@ -490,16 +540,25 @@ def leaderboard():
             SELECT COUNT(*) as count 
             FROM games 
             WHERE date <= date('now')
+                AND (is_abandoned IS NULL OR is_abandoned = 0)
         ''').fetchone()['count']
         
         attendance_data = conn.execute('''
             SELECT 
                 p.id,
                 p.name,
-                COUNT(DISTINCT CASE WHEN a.status = 'playing' AND g.date <= date('now') THEN a.game_id END) as games_played,
+                COUNT(DISTINCT CASE
+                    WHEN a.status = 'playing'
+                        AND g.date <= date('now')
+                        AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+                    THEN a.game_id END) as games_played,
                 CASE 
                     WHEN ? > 0 
-                    THEN ROUND(COUNT(DISTINCT CASE WHEN a.status = 'playing' AND g.date <= date('now') THEN a.game_id END) * 100.0 / ?, 1)
+                    THEN ROUND(COUNT(DISTINCT CASE
+                        WHEN a.status = 'playing'
+                            AND g.date <= date('now')
+                            AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+                        THEN a.game_id END) * 100.0 / ?, 1)
                     ELSE 0 
                 END as attendance_rate
             FROM players p
@@ -652,16 +711,22 @@ def edit_game(game_id):
             notes = request.form.get('notes', '')
             team1_score = request.form.get('team1_score', None)
             team2_score = request.form.get('team2_score', None)
+            is_abandoned = 1 if request.form.get('is_abandoned') == 'on' else 0
             
             # Convert empty strings to None for database
             team1_score = int(team1_score) if team1_score else None
             team2_score = int(team2_score) if team2_score else None
+
+            # Abandoned matches do not carry final scores
+            if is_abandoned:
+                team1_score = None
+                team2_score = None
             
             conn.execute('''
                 UPDATE games 
-                SET date = ?, location = ?, notes = ?, team1_score = ?, team2_score = ?
+                SET date = ?, location = ?, notes = ?, team1_score = ?, team2_score = ?, is_abandoned = ?
                 WHERE id = ?
-            ''', (date, location, notes, team1_score, team2_score, game_id))
+            ''', (date, location, notes, team1_score, team2_score, is_abandoned, game_id))
             conn.commit()
             
             return redirect(url_for('admin_games'))
@@ -673,6 +738,26 @@ def edit_game(game_id):
             return "Game not found", 404
         
         return render_template('edit_game.html', game=game)
+
+@app.route('/games/<int:game_id>/abandoned', methods=['POST'])
+@login_required
+def toggle_game_abandoned(game_id):
+    abandoned = 1 if request.form.get('abandoned') == '1' else 0
+
+    with get_db() as conn:
+        if abandoned:
+            conn.execute('''
+                UPDATE games
+                SET is_abandoned = 1,
+                    team1_score = NULL,
+                    team2_score = NULL
+                WHERE id = ?
+            ''', (game_id,))
+        else:
+            conn.execute('UPDATE games SET is_abandoned = 0 WHERE id = ?', (game_id,))
+        conn.commit()
+
+    return redirect(url_for('admin_games'))
 
 @app.route('/games/<int:game_id>/delete', methods=['POST'])
 @login_required

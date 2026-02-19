@@ -23,6 +23,11 @@
             <label for="notes">Notes</label>
             <textarea id="notes" name="notes">{{ game.notes or '' }}</textarea>
         </div>
+
+        <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="is_abandoned" name="is_abandoned" {% if game.is_abandoned %}checked{% endif %} style="width: auto;">
+            <label for="is_abandoned" style="margin: 0;">Mark this match as abandoned (excluded from stats)</label>
+        </div>
         
         <div class="grid" style="grid-template-columns: repeat(2, 1fr); gap: 20px;">
             <div class="form-group">
