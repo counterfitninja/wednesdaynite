@@ -5,7 +5,9 @@ All notable changes to this project should be documented in this file.
 This project loosely follows Keep a Changelog format and Semantic Versioning principles.
 
 ## [Unreleased]
-No unreleased changes yet.
+### Changed
+- Attendance percentage now uses `playing / responded` games (responses with any status), excluding abandoned matches.
+- Leaderboard attendance calculations are year-based and use the same responded-games denominator.
 
 ## [2026-02-19.1] - Sortable Leaderboards Patch
 ### Added
