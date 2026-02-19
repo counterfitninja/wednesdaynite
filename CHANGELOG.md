@@ -5,29 +5,33 @@ All notable changes to this project should be documented in this file.
 This project loosely follows Keep a Changelog format and Semantic Versioning principles.
 
 ## [Unreleased]
+No unreleased changes yet.
+
+## [2026-02-19.1] - Sortable Leaderboards Patch
 ### Added
-- Added abandoned match support (`is_abandoned`) with admin toggle.
-- Added admin game status filter (`All / Active / Abandoned`).
-- Rewrote and expanded project README for accurate setup and operations.
-- Added operational docs: release checklist and changelog.
-- Added client-side sortable columns for wins and attendance leaderboard tables.
+- Client-side sortable columns for Win Leaderboard (`Player`, `Wins`, `Draws`, `Losses`, `Games`, `Win %`).
+- Client-side sortable columns for Attendance Leaderboard (`Player`, `Games Played`, `Attendance %`).
 
 ### Changed
-- Excluded abandoned games from leaderboard and attendance statistics.
-- Final-score shortcut now skips abandoned matches.
+- Rank display (medals / `#n`) now recalculates after sorting in both leaderboard tables.
 
-### Fixed
-- Documentation mismatch (old Node/React content replaced with Flask app docs).
-
-## [2026-02-19] - Docs + Abandoned Matches
+## [2026-02-19] - Core Update: Abandoned Matches + Docs + Repo Hygiene
 ### Added
 - New game state: abandoned.
 - Admin controls to mark/restore abandoned games.
 - Admin filter by game status.
+- Expanded project documentation for setup, operations, troubleshooting, and maintenance.
+- Added `RELEASE_CHECKLIST.md` and `CHANGELOG.md`.
+- Added `.gitignore` rules for local runtime artifacts.
 
 ### Changed
 - Stats calculations now ignore abandoned games.
 - README now aligned with real app architecture and workflows.
+- Final-score shortcut now skips abandoned matches.
+
+### Fixed
+- Documentation mismatch (old Node/React content replaced with Flask app docs).
+- Stopped tracking local `football.db` and `.cache` files in git.
 
 ---
 
