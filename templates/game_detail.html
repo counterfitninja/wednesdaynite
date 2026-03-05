@@ -344,6 +344,7 @@ if (unpaidOnlyToggle && paymentsList) {
                 updateCounters();
                 setStatus('Not saved', '#e74c3c', 2500);
                 showInlineMessage('Could not save payment update. Please try again.', 'error', 3000);
+                alert('Could not save payment update. Please try again.');
             } finally {
                 this.disabled = false;
             }
