@@ -400,12 +400,23 @@ def admin_settings():
     with get_db() as conn:
         if request.method == 'POST':
             notifications_enabled = request.form.get('notifications_enabled') == 'on'
+            weekly_payment_amount_raw = request.form.get('weekly_payment_amount', '').strip()
+
+            try:
+                weekly_payment_amount = float(weekly_payment_amount_raw) if weekly_payment_amount_raw else 0.0
+            except ValueError:
+                weekly_payment_amount = 0.0
+            weekly_payment_amount = max(0.0, weekly_payment_amount)
             
             # Update or insert setting
             conn.execute('''
                 INSERT OR REPLACE INTO settings (key, value) 
                 VALUES ('notifications_enabled', ?)
             ''', ('true' if notifications_enabled else 'false',))
+            conn.execute('''
+                INSERT OR REPLACE INTO settings (key, value)
+                VALUES ('weekly_payment_amount', ?)
+            ''', (str(weekly_payment_amount),))
             conn.commit()
             
             return redirect(url_for('admin_settings'))
@@ -414,10 +425,21 @@ def admin_settings():
         setting = conn.execute(
             "SELECT value FROM settings WHERE key = 'notifications_enabled'"
         ).fetchone()
+        payment_setting = conn.execute(
+            "SELECT value FROM settings WHERE key = 'weekly_payment_amount'"
+        ).fetchone()
         
         notifications_enabled = setting['value'] == 'true' if setting else False
+        try:
+            weekly_payment_amount = float(payment_setting['value']) if payment_setting and payment_setting['value'] is not None else 0.0
+        except (TypeError, ValueError):
+            weekly_payment_amount = 0.0
     
-    return render_template('admin_settings.html', notifications_enabled=notifications_enabled)
+    return render_template(
+        'admin_settings.html',
+        notifications_enabled=notifications_enabled,
+        weekly_payment_amount=weekly_payment_amount
+    )
 
 @app.route('/api/settings/notifications')
 def get_notification_setting():
@@ -802,6 +824,14 @@ def game_detail(game_id):
         ''', (game_id,)).fetchall()
         
         all_players = conn.execute('SELECT * FROM players ORDER BY name').fetchall()
+
+        payment_amount_setting = conn.execute(
+            "SELECT value FROM settings WHERE key = 'weekly_payment_amount'"
+        ).fetchone()
+        try:
+            weekly_payment_amount = float(payment_amount_setting['value']) if payment_amount_setting and payment_amount_setting['value'] is not None else 0.0
+        except (TypeError, ValueError):
+            weekly_payment_amount = 0.0
     
     playing = [a for a in attendance if a['status'] == 'playing']
     not_playing = [a for a in attendance if a['status'] == 'not_playing']
@@ -812,7 +842,8 @@ def game_detail(game_id):
                          playing=playing,
                          not_playing=not_playing,
                          maybe=maybe,
-                         all_players=all_players)
+                         all_players=all_players,
+                         weekly_payment_amount=weekly_payment_amount)
 
 @app.route('/games/<int:game_id>/teams')
 def generate_teams(game_id):
@@ -1113,6 +1144,14 @@ def update_payment(game_id):
             WHERE game_id = ? AND status = 'playing'
         ''', (game_id,)).fetchone()
 
+        payment_setting = conn.execute(
+            "SELECT value FROM settings WHERE key = 'weekly_payment_amount'"
+        ).fetchone()
+        try:
+            weekly_payment_amount = float(payment_setting['value']) if payment_setting and payment_setting['value'] is not None else 0.0
+        except (TypeError, ValueError):
+            weekly_payment_amount = 0.0
+
         conn.commit()
 
     if is_ajax:
@@ -1123,7 +1162,8 @@ def update_payment(game_id):
             'paid': paid,
             'total_playing': total_playing,
             'paid_count': paid_count,
-            'unpaid_count': max(total_playing - paid_count, 0)
+            'unpaid_count': max(total_playing - paid_count, 0),
+            'total_paid_amount': round(paid_count * weekly_payment_amount, 2)
         })
 
     return redirect(url_for('game_detail', game_id=game_id))

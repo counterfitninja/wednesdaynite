@@ -18,6 +18,20 @@
     
     <form method="POST">
         <div style="margin-bottom: 20px;">
+            <label for="weekly_payment_amount" style="display: block; font-weight: 600; margin-bottom: 8px;">Weekly payment amount per player (£)</label>
+            <input
+                id="weekly_payment_amount"
+                name="weekly_payment_amount"
+                type="number"
+                min="0"
+                step="0.01"
+                value="{{ '%.2f'|format(weekly_payment_amount) }}"
+                style="max-width: 220px;"
+            >
+            <p style="color: #7f8c8d; font-size: 14px; margin-top: 8px; margin-bottom: 0;">Used on the game page to calculate the running paid total.</p>
+        </div>
+
+        <div style="margin-bottom: 20px;">
             <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 2px solid #e0e0e0;">
                 <input type="checkbox" name="notifications_enabled" {% if notifications_enabled %}checked{% endif %} 
                        style="width: 24px; height: 24px; cursor: pointer;">
