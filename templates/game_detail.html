@@ -121,6 +121,7 @@
         <input type="checkbox" id="show-unpaid-only" style="width: auto;">
         Show unpaid only
     </label>
+    <div id="payment-inline-message" style="display: none; margin-bottom: 12px; padding: 10px 12px; border-radius: 4px; font-size: 0.9em;"></div>
     
     <form method="POST" action="/games/{{ game.id }}/bulk-remove" style="margin-bottom: 20px;">
         <div class="form-group">
@@ -201,8 +202,37 @@ function addSelectedPlayers() {
 
 const unpaidOnlyToggle = document.getElementById('show-unpaid-only');
 const paymentsList = document.getElementById('playing-payments-list');
+const paymentInlineMessage = document.getElementById('payment-inline-message');
 
 if (unpaidOnlyToggle && paymentsList) {
+    const showInlineMessage = (text, type = 'error', clearAfterMs = 0) => {
+        if (!paymentInlineMessage) {
+            return;
+        }
+
+        paymentInlineMessage.style.display = 'block';
+        paymentInlineMessage.textContent = text;
+
+        if (type === 'error') {
+            paymentInlineMessage.style.background = '#f8d7da';
+            paymentInlineMessage.style.color = '#721c24';
+            paymentInlineMessage.style.border = '1px solid #f5c6cb';
+        } else {
+            paymentInlineMessage.style.background = '#d4edda';
+            paymentInlineMessage.style.color = '#155724';
+            paymentInlineMessage.style.border = '1px solid #c3e6cb';
+        }
+
+        if (clearAfterMs > 0) {
+            window.setTimeout(() => {
+                if (paymentInlineMessage.textContent === text) {
+                    paymentInlineMessage.style.display = 'none';
+                    paymentInlineMessage.textContent = '';
+                }
+            }, clearAfterMs);
+        }
+    };
+
     const updateCounters = (serverCounts = null) => {
         const allRows = Array.from(paymentsList.querySelectorAll('li[data-paid]'));
         const total = serverCounts ? serverCounts.total_playing : allRows.length;
@@ -303,13 +333,17 @@ if (unpaidOnlyToggle && paymentsList) {
 
                 updateCounters(data);
                 setStatus('Saved', '#27ae60', 1200);
+                if (paymentInlineMessage && paymentInlineMessage.style.display !== 'none') {
+                    paymentInlineMessage.style.display = 'none';
+                    paymentInlineMessage.textContent = '';
+                }
             } catch (error) {
                 row.dataset.paid = previousPaid;
                 this.checked = previousPaid === '1';
                 applyUnpaidFilter();
                 updateCounters();
                 setStatus('Not saved', '#e74c3c', 2500);
-                alert('Could not save payment update. Please try again.');
+                showInlineMessage('Could not save payment update. Please try again.', 'error', 3000);
             } finally {
                 this.disabled = false;
             }
