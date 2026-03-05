@@ -150,6 +150,27 @@ web: gunicorn app:app
 
 If deploying with Gunicorn, ensure it is installed in the environment.
 
+### Pelican Panel (Egg)
+If deploying via Pelican/Pterodactyl, import:
+
+- [egg-wednesdaynite.json](egg-wednesdaynite.json)
+
+Set these variables before first start:
+
+- `ADMIN_PASSWORD` (required)
+- `SECRET_KEY` (recommended; generate with `python -c "import secrets; print(secrets.token_hex(32))"`)
+- `GIT_ADDRESS` (your repository URL)
+
+Optional:
+
+- `BRANCH` (defaults to `main` if blank)
+- `AUTO_UPDATE` (`1` to pull latest on startup, `0` to disable)
+
+Note:
+
+- This app uses SQLite (`football.db`) on local/container filesystem storage.
+- Make sure your server has persistent storage mounted, and back up `football.db` regularly.
+
 ### Azure Notes
 - App detects Azure using `WEBSITE_INSTANCE_ID`.
 - In Azure, DB is stored under `/home/football.db` for persistence.

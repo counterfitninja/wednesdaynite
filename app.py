@@ -10,9 +10,9 @@ app.secret_key = os.environ.get('SECRET_KEY', 'change-this-to-something-secure-i
 # Build version - timestamp when app starts
 BUILD_VERSION = datetime.now().strftime('%Y.%m.%d.%H%M')
 
-# Network config (hard-coded; adjust here if you change IP/port)
-HOST = '0.0.0.0'   # e.g., '192.168.1.50' if you need a specific LAN IP
-PORT = 5000        # choose your desired port
+# Network config
+HOST = os.environ.get('HOST', '0.0.0.0')
+PORT = int(os.environ.get('PORT', os.environ.get('SERVER_PORT', 5000)))
 
 # Admin password - require environment variable in production
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD')
