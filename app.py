@@ -736,6 +736,65 @@ def edit_player(player_id):
         return render_template('edit_player.html', player=player)
     return render_template('add_player.html')
 
+@app.route('/players/<int:player_id>/payments', methods=['GET', 'POST'])
+@login_required
+def player_payments(player_id):
+    with get_db() as conn:
+        player = conn.execute('SELECT * FROM players WHERE id = ?', (player_id,)).fetchone()
+        if not player:
+            return "Player not found", 404
+
+        if request.method == 'POST':
+            attendance_id = request.form.get('attendance_id', type=int)
+            paid = 1 if request.form.get('paid') == '1' else 0
+
+            if attendance_id:
+                conn.execute('''
+                    UPDATE attendance
+                    SET paid = ?
+                    WHERE id = ? AND player_id = ? AND status = 'playing'
+                ''', (paid, attendance_id, player_id))
+                conn.commit()
+
+            return redirect(url_for('player_payments', player_id=player_id))
+
+        payment_setting = conn.execute(
+            "SELECT value FROM settings WHERE key = 'weekly_payment_amount'"
+        ).fetchone()
+        try:
+            weekly_payment_amount = float(payment_setting['value']) if payment_setting and payment_setting['value'] is not None else 0.0
+        except (TypeError, ValueError):
+            weekly_payment_amount = 0.0
+
+        weeks = conn.execute('''
+            SELECT
+                a.id as attendance_id,
+                a.game_id,
+                COALESCE(a.paid, 0) as paid,
+                g.date,
+                g.location
+            FROM attendance a
+            JOIN games g ON a.game_id = g.id
+            WHERE a.player_id = ?
+              AND a.status = 'playing'
+              AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+            ORDER BY g.date DESC
+        ''', (player_id,)).fetchall()
+
+    total_weeks = len(weeks)
+    paid_weeks = sum(1 for week in weeks if week['paid'])
+    total_paid_amount = round(paid_weeks * weekly_payment_amount, 2)
+
+    return render_template(
+        'player_payments.html',
+        player=player,
+        weeks=weeks,
+        total_weeks=total_weeks,
+        paid_weeks=paid_weeks,
+        weekly_payment_amount=weekly_payment_amount,
+        total_paid_amount=total_paid_amount
+    )
+
 @app.route('/players/<int:player_id>/delete', methods=['POST'])
 @login_required
 def delete_player(player_id):

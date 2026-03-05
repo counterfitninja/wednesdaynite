@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Player Payments - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <h1>Payments - {{ player.name }}</h1>
+    <div>
+        <a href="/admin/players" class="btn">← Back to Players</a>
+        <a href="/players/{{ player.id }}/edit" class="btn">Edit Player</a>
+    </div>
+</div>
+
+<div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="card stat">
+        <div class="stat-value" style="color: #27ae60;">{{ paid_weeks }}</div>
+        <div class="stat-label">Weeks Paid</div>
+    </div>
+    <div class="card stat">
+        <div class="stat-value" style="color: #3498db;">{{ total_weeks }}</div>
+        <div class="stat-label">Weeks Played</div>
+    </div>
+    <div class="card stat">
+        <div class="stat-value" style="color: #2c3e50; font-size: 2em;">£{{ "%.2f"|format(total_paid_amount) }}</div>
+        <div class="stat-label">Total Paid</div>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 10px;">
+    <p style="margin: 0; color: #7f8c8d;">
+        Weekly rate: <strong>£{{ "%.2f"|format(weekly_payment_amount) }}</strong>
+        {% if player.payment_exempt %}
+        • <span class="badge" style="background-color: #7f8c8d;">Payment Exempt</span>
+        {% endif %}
+    </p>
+</div>
+
+{% if weeks %}
+<div class="card">
+    <h2>Weekly Payments</h2>
+    <p style="margin-top: -5px; margin-bottom: 15px; color: #7f8c8d; font-size: 0.95em;">
+        Tick a week to mark paid. Changes save immediately.
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Location</th>
+                <th>Paid</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for week in weeks %}
+            <tr>
+                <td><strong>{{ week.date|ukdate }}</strong></td>
+                <td>{{ week.location or 'N/A' }}</td>
+                <td>
+                    {% if player.payment_exempt %}
+                    <span class="badge" style="background-color: #7f8c8d;">Exempt</span>
+                    {% else %}
+                    <form method="POST" action="/players/{{ player.id }}/payments" style="display: inline;">
+                        <input type="hidden" name="attendance_id" value="{{ week.attendance_id }}">
+                        <label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" name="paid" value="1" {% if week.paid %}checked{% endif %} style="width: auto;" onchange="this.form.submit()">
+                            Paid
+                        </label>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card">
+    <p>No playing attendance records found for this player yet.</p>
+</div>
+{% endif %}
+{% endblock %}
