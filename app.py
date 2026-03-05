@@ -361,6 +361,13 @@ def admin_players():
             WHERE date <= date('now')
                 AND (is_abandoned IS NULL OR is_abandoned = 0)
         """).fetchone()['count']
+        payment_setting = conn.execute(
+            "SELECT value FROM settings WHERE key = 'weekly_payment_amount'"
+        ).fetchone()
+        try:
+            weekly_payment_amount = float(payment_setting['value']) if payment_setting and payment_setting['value'] is not None else 0.0
+        except (TypeError, ValueError):
+            weekly_payment_amount = 0.0
 
         # Attendance denominator is all non-abandoned past games.
         players = conn.execute('''
@@ -376,6 +383,12 @@ def admin_players():
                         AND g.date <= date('now')
                         AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
                     THEN a.game_id END) as games_played,
+                COUNT(DISTINCT CASE
+                    WHEN a.status = 'playing'
+                        AND COALESCE(a.paid, 0) = 1
+                        AND g.date <= date('now')
+                        AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+                    THEN a.game_id END) as paid_games,
                 ? as total_games,
                 CASE 
                     WHEN ? > 0 
@@ -392,7 +405,11 @@ def admin_players():
             GROUP BY p.id, p.name, p.alias, p.phone, p.email, p.skill_rating
             ORDER BY p.name
         ''', (total_games_count, total_games_count, total_games_count)).fetchall()
-    return render_template('admin_players.html', players=players)
+    return render_template(
+        'admin_players.html',
+        players=players,
+        weekly_payment_amount=weekly_payment_amount
+    )
 
 @app.route('/admin/settings', methods=['GET', 'POST'])
 @login_required
