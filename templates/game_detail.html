@@ -5,12 +5,13 @@
 {% block content %}
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
     <a href="/" class="btn">← Back to Games</a>
-    {% if playing|length >= 2 and not game.is_abandoned %}
     <div>
+        <a href="/help" class="btn">❓ Need help?</a>
+        {% if playing|length >= 2 and not game.is_abandoned %}
         <a href="/games/{{ game.id }}/teams" class="btn btn-success">🎲 Generate Balanced Teams</a>
         <a href="/games/{{ game.id }}/teams/manual" class="btn" style="background-color: #9b59b6;">✏️ Manual Teams</a>
+        {% endif %}
     </div>
-    {% endif %}
 </div>
 
 <div class="card">

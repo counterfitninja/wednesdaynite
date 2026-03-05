@@ -28,6 +28,7 @@ Simple Flask app for managing weekly casual football games:
 ## Project Docs
 - [CHANGELOG.md](CHANGELOG.md) — tracked release history and notable changes
 - [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) — pre-release and post-deploy verification steps
+- [HOW_IT_WORKS.md](HOW_IT_WORKS.md) — plain-English walkthrough of weekly app flow
 
 ## Local Setup (Windows / PowerShell)
 1. Open terminal in project root.

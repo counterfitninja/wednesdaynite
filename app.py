@@ -580,6 +580,10 @@ def leaderboard():
                          year=current_year,
                          final_score_game_id=final_score_target['id'] if final_score_target else None)
 
+@app.route('/help')
+def help_page():
+    return render_template('help.html')
+
 @app.route('/players/add', methods=['GET', 'POST'])
 def add_player():
     if request.method == 'POST':
