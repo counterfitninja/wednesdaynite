@@ -40,7 +40,8 @@
     </div>
 </div>
 
-{% set paid_count = playing|selectattr('paid', 'equalto', 1)|list|length %}
+{% set chargeable_players = playing|rejectattr('payment_exempt', 'equalto', 1)|list %}
+{% set paid_count = chargeable_players|selectattr('paid', 'equalto', 1)|list|length %}
 {% set paid_total_amount = paid_count * weekly_payment_amount %}
 
 {% if not game.is_abandoned %}
@@ -116,7 +117,7 @@
 <div class="card">
     <h2>✅ Playing ({{ playing|length }})</h2>
     <p style="margin-top: -5px; margin-bottom: 15px; color: #7f8c8d;">
-        Payments marked: <strong id="paid-count">{{ paid_count }}</strong>/<strong id="paid-total">{{ playing|length }}</strong> • Unpaid: <strong id="unpaid-count">{{ playing|length - paid_count }}</strong> • Rate: <strong>£{{ '%.2f'|format(weekly_payment_amount) }}</strong>
+        Payments marked: <strong id="paid-count">{{ paid_count }}</strong>/<strong id="paid-total">{{ chargeable_players|length }}</strong> • Unpaid: <strong id="unpaid-count">{{ chargeable_players|length - paid_count }}</strong> • Rate: <strong>£{{ '%.2f'|format(weekly_payment_amount) }}</strong>
     </p>
     <label style="display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px; cursor: pointer;">
         <input type="checkbox" id="show-unpaid-only" style="width: auto;">
@@ -141,19 +142,26 @@
     
     <ul id="playing-payments-list" data-payment-amount="{{ weekly_payment_amount }}" style="list-style: none; padding: 0; margin-bottom: 0;">
         {% for player in playing %}
-        <li data-paid="{{ 1 if player.paid else 0 }}" style="padding: 8px 0; border-bottom: 1px solid #eee;">
+        <li data-paid="{{ 1 if player.paid else 0 }}" data-chargeable="{{ 0 if player.payment_exempt else 1 }}" style="padding: 8px 0; border-bottom: 1px solid #eee;">
             <form method="POST" action="/games/{{ game.id }}/payment" style="display: flex; align-items: center; gap: 12px;">
                 <div style="flex: 1 1 auto; min-width: 0;">
                     {{ player.name }}
                     {% if player.phone %}
                     <span style="color: #7f8c8d; font-size: 0.9em;"> • {{ player.phone }}</span>
                     {% endif %}
+                    {% if player.payment_exempt %}
+                    <span class="badge" style="background-color: #7f8c8d; margin-left: 8px; font-size: 0.75em;">Exempt</span>
+                    {% endif %}
                 </div>
                 <input type="hidden" name="player_id" value="{{ player.id }}">
+                {% if player.payment_exempt %}
+                <span style="font-size: 0.9em; color: #7f8c8d; min-width: 78px; text-align: right;">No payment</span>
+                {% else %}
                 <label style="display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; cursor: pointer; font-size: 0.9em; min-width: 78px;">
                     <input type="checkbox" class="payment-toggle" {% if player.paid %}checked{% endif %} style="width: auto;">
                     Paid
                 </label>
+                {% endif %}
                 <span class="payment-status" style="font-size: 0.8em; color: #7f8c8d; min-width: 74px; text-align: right;" aria-live="polite"></span>
             </form>
         </li>
@@ -242,8 +250,9 @@ if (unpaidOnlyToggle && paymentsList) {
 
     const updateCounters = (serverCounts = null) => {
         const allRows = Array.from(paymentsList.querySelectorAll('li[data-paid]'));
-        const total = serverCounts ? serverCounts.total_playing : allRows.length;
-        const paid = serverCounts ? serverCounts.paid_count : allRows.filter(row => row.dataset.paid === '1').length;
+        const chargeableRows = allRows.filter(row => row.dataset.chargeable === '1');
+        const total = serverCounts ? serverCounts.total_playing : chargeableRows.length;
+        const paid = serverCounts ? serverCounts.paid_count : chargeableRows.filter(row => row.dataset.paid === '1').length;
         const unpaid = serverCounts ? serverCounts.unpaid_count : Math.max(total - paid, 0);
         const paidAmount = serverCounts && typeof serverCounts.total_paid_amount === 'number'
             ? serverCounts.total_paid_amount
@@ -274,7 +283,8 @@ if (unpaidOnlyToggle && paymentsList) {
 
         rows.forEach(row => {
             const isPaid = row.dataset.paid === '1';
-            row.style.display = (showUnpaidOnly && isPaid) ? 'none' : '';
+            const isChargeable = row.dataset.chargeable === '1';
+            row.style.display = (showUnpaidOnly && (!isChargeable || isPaid)) ? 'none' : '';
         });
     };
 

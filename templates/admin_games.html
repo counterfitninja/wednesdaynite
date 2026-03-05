@@ -71,6 +71,22 @@
             {% endfor %}
         </tbody>
     </table>
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+        {% if has_prev %}
+        <a href="/admin/games?status={{ status_filter }}&page={{ page - 1 }}" class="btn">← Previous</a>
+        {% else %}
+        <span></span>
+        {% endif %}
+
+        <span style="color: #7f8c8d; font-size: 0.9em;">Page {{ page }}</span>
+
+        {% if has_next %}
+        <a href="/admin/games?status={{ status_filter }}&page={{ page + 1 }}" class="btn">Next →</a>
+        {% else %}
+        <span></span>
+        {% endif %}
+    </div>
 </div>
 {% else %}
 <div class="card">

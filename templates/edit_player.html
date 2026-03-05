@@ -33,6 +33,13 @@
             <input type="number" id="skill_rating" name="skill_rating" min="1" max="5" value="{{ player.skill_rating or 3 }}" required>
             <small style="color: #7f8c8d;">Rate the player's skill level from 1 (beginner) to 5 (expert). Used for team balancing.</small>
         </div>
+
+        <div class="form-group">
+            <label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" name="payment_exempt" {% if player.payment_exempt %}checked{% endif %} style="width: auto;">
+                Payment exempt (does not pay weekly fee)
+            </label>
+        </div>
         
         <button type="submit" class="btn btn-success">Update Player</button>
         <a href="/players" class="btn">Cancel</a>

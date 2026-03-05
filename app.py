@@ -118,6 +118,7 @@ def init_db():
                 phone TEXT,
                 email TEXT,
                 skill_rating INTEGER DEFAULT 5,
+                payment_exempt INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -196,6 +197,11 @@ def init_db():
             pass  # Column already exists
 
         try:
+            conn.execute('ALTER TABLE players ADD COLUMN payment_exempt INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        try:
             conn.execute('ALTER TABLE games ADD COLUMN team1_score INTEGER')
         except sqlite3.OperationalError:
             pass  # Column already exists
@@ -250,6 +256,11 @@ def logout():
 @app.route('/')
 def index():
     from datetime import datetime, timedelta
+    page = request.args.get('page', 1, type=int)
+    if page < 1:
+        page = 1
+    per_page = 10
+    offset = (page - 1) * per_page
     
     with get_db() as conn:
         # Auto-create next Wednesday game if it doesn't exist
@@ -271,7 +282,11 @@ def index():
             )
             conn.commit()
         
-        games = conn.execute('SELECT * FROM games ORDER BY date DESC LIMIT 10').fetchall()
+        total_games = conn.execute('SELECT COUNT(*) as count FROM games').fetchone()['count']
+        games = conn.execute(
+            'SELECT * FROM games ORDER BY date DESC LIMIT ? OFFSET ?',
+            (per_page, offset)
+        ).fetchall()
         
         game_data = []
         for game in games:
@@ -300,7 +315,17 @@ def index():
                 'is_abandoned': game['is_abandoned'] if 'is_abandoned' in game.keys() else 0
             })
     
-    return render_template('index.html', games=game_data, is_admin=session.get('logged_in'))
+    has_prev = page > 1
+    has_next = (offset + len(game_data)) < total_games
+
+    return render_template(
+        'index.html',
+        games=game_data,
+        is_admin=session.get('logged_in'),
+        page=page,
+        has_prev=has_prev,
+        has_next=has_next
+    )
 
 @app.route('/admin')
 @login_required
@@ -313,24 +338,43 @@ def admin_games():
     status_filter = request.args.get('status', 'all')
     if status_filter not in ('all', 'active', 'abandoned'):
         status_filter = 'all'
+    page = request.args.get('page', 1, type=int)
+    if page < 1:
+        page = 1
+    per_page = 20
+    offset = (page - 1) * per_page
 
     with get_db() as conn:
         if status_filter == 'active':
+            total_games = conn.execute('''
+                SELECT COUNT(*) as count
+                FROM games
+                WHERE is_abandoned = 0 OR is_abandoned IS NULL
+            ''').fetchone()['count']
             games = conn.execute('''
                 SELECT * FROM games
                 WHERE is_abandoned = 0 OR is_abandoned IS NULL
                 ORDER BY date DESC
-                LIMIT 20
-            ''').fetchall()
+                LIMIT ? OFFSET ?
+            ''', (per_page, offset)).fetchall()
         elif status_filter == 'abandoned':
+            total_games = conn.execute('''
+                SELECT COUNT(*) as count
+                FROM games
+                WHERE is_abandoned = 1
+            ''').fetchone()['count']
             games = conn.execute('''
                 SELECT * FROM games
                 WHERE is_abandoned = 1
                 ORDER BY date DESC
-                LIMIT 20
-            ''').fetchall()
+                LIMIT ? OFFSET ?
+            ''', (per_page, offset)).fetchall()
         else:
-            games = conn.execute('SELECT * FROM games ORDER BY date DESC LIMIT 20').fetchall()
+            total_games = conn.execute('SELECT COUNT(*) as count FROM games').fetchone()['count']
+            games = conn.execute(
+                'SELECT * FROM games ORDER BY date DESC LIMIT ? OFFSET ?',
+                (per_page, offset)
+            ).fetchall()
         
         game_data = []
         for game in games:
@@ -349,7 +393,17 @@ def admin_games():
                 'is_abandoned': game['is_abandoned'] if 'is_abandoned' in game.keys() else 0
             })
     
-    return render_template('admin_games.html', games=game_data, status_filter=status_filter)
+    has_prev = page > 1
+    has_next = (offset + len(game_data)) < total_games
+
+    return render_template(
+        'admin_games.html',
+        games=game_data,
+        status_filter=status_filter,
+        page=page,
+        has_prev=has_prev,
+        has_next=has_next
+    )
 
 @app.route('/admin/players')
 @login_required
@@ -378,6 +432,7 @@ def admin_players():
                 p.phone,
                 p.email,
                 p.skill_rating,
+                COALESCE(p.payment_exempt, 0) as payment_exempt,
                 COUNT(DISTINCT CASE
                     WHEN a.status = 'playing'
                         AND g.date <= date('now')
@@ -402,7 +457,7 @@ def admin_players():
             FROM players p
             LEFT JOIN attendance a ON p.id = a.player_id
             LEFT JOIN games g ON a.game_id = g.id
-            GROUP BY p.id, p.name, p.alias, p.phone, p.email, p.skill_rating
+            GROUP BY p.id, p.name, p.alias, p.phone, p.email, p.skill_rating, p.payment_exempt
             ORDER BY p.name
         ''', (total_games_count, total_games_count, total_games_count)).fetchall()
     return render_template(
@@ -636,6 +691,7 @@ def add_player():
         phone = request.form.get('phone', '')
         email = request.form.get('email', '')
         skill_rating = request.form.get('skill_rating', 5, type=int)
+        payment_exempt = 1 if request.form.get('payment_exempt') == 'on' else 0
         
         # Validate skill rating is between 1-5
         if skill_rating < 1 or skill_rating > 5:
@@ -643,8 +699,8 @@ def add_player():
         
         try:
             with get_db() as conn:
-                conn.execute('INSERT INTO players (name, alias, phone, email, skill_rating) VALUES (?, ?, ?, ?, ?)',
-                           (name, alias, phone, email, skill_rating))
+                conn.execute('INSERT INTO players (name, alias, phone, email, skill_rating, payment_exempt) VALUES (?, ?, ?, ?, ?, ?)',
+                           (name, alias, phone, email, skill_rating, payment_exempt))
                 conn.commit()
             return redirect(url_for('admin_players'))
         except sqlite3.IntegrityError:
@@ -661,14 +717,15 @@ def edit_player(player_id):
             phone = request.form.get('phone', '')
             email = request.form.get('email', '')
             skill_rating = request.form.get('skill_rating', 5, type=int)
+            payment_exempt = 1 if request.form.get('payment_exempt') == 'on' else 0
             
             # Validate skill rating is between 1-5
             if skill_rating < 1 or skill_rating > 5:
                 player = conn.execute('SELECT * FROM players WHERE id = ?', (player_id,)).fetchone()
                 return render_template('edit_player.html', player=player, error='Skill rating must be between 1 and 5')
             
-            conn.execute('UPDATE players SET name = ?, alias = ?, phone = ?, email = ?, skill_rating = ? WHERE id = ?',
-                       (name, alias, phone, email, skill_rating, player_id))
+            conn.execute('UPDATE players SET name = ?, alias = ?, phone = ?, email = ?, skill_rating = ?, payment_exempt = ? WHERE id = ?',
+                       (name, alias, phone, email, skill_rating, payment_exempt, player_id))
             conn.commit()
             return redirect(url_for('admin_players'))
         
@@ -1157,8 +1214,11 @@ def update_payment(game_id):
             SELECT
                 COUNT(*) as total_playing,
                 SUM(CASE WHEN COALESCE(paid, 0) = 1 THEN 1 ELSE 0 END) as paid_count
-            FROM attendance
-            WHERE game_id = ? AND status = 'playing'
+            FROM attendance a
+            JOIN players p ON p.id = a.player_id
+            WHERE a.game_id = ?
+              AND a.status = 'playing'
+              AND COALESCE(p.payment_exempt, 0) = 0
         ''', (game_id,)).fetchone()
 
         payment_setting = conn.execute(
