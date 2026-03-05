@@ -210,6 +210,11 @@ def init_db():
         except sqlite3.OperationalError:
             pass  # Column already exists
 
+        try:
+            conn.execute('ALTER TABLE attendance ADD COLUMN paid INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
         conn.execute('UPDATE games SET is_abandoned = 0 WHERE is_abandoned IS NULL')
 
         # Ensure default alias for known mapping
@@ -789,7 +794,7 @@ def game_detail(game_id):
             return "Game not found", 404
         
         attendance = conn.execute('''
-            SELECT p.*, a.status
+            SELECT p.*, a.status, COALESCE(a.paid, 0) as paid
             FROM attendance a
             JOIN players p ON a.player_id = p.id
             WHERE a.game_id = ?
@@ -1068,17 +1073,61 @@ def teams_watch_view(game_id):
 def update_attendance(game_id):
     player_id = request.form['player_id']
     status = request.form['status']
+    paid = 1 if request.form.get('paid') == 'on' else 0
     
     with get_db() as conn:
         conn.execute('''
-            INSERT INTO attendance (game_id, player_id, status) 
-            VALUES (?, ?, ?)
+            INSERT INTO attendance (game_id, player_id, status, paid)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(game_id, player_id) 
-            DO UPDATE SET status = excluded.status
-        ''', (game_id, player_id, status))
+            DO UPDATE SET status = excluded.status, paid = excluded.paid
+        ''', (game_id, player_id, status, paid))
         conn.commit()
     
     return redirect(url_for('game_detail', game_id=game_id))
+
+@app.route('/games/<int:game_id>/payment', methods=['POST'])
+@login_required
+def update_payment(game_id):
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    player_id = request.form.get('player_id', type=int)
+    paid = 1 if request.form.get('paid') == '1' else 0
+
+    if not player_id:
+        if is_ajax:
+            return jsonify({'ok': False, 'error': 'Missing player_id'}), 400
+        return redirect(url_for('game_detail', game_id=game_id))
+
+    with get_db() as conn:
+        conn.execute('''
+            UPDATE attendance
+            SET paid = ?
+            WHERE game_id = ? AND player_id = ?
+        ''', (paid, game_id, player_id))
+
+        totals = conn.execute('''
+            SELECT
+                COUNT(*) as total_playing,
+                SUM(CASE WHEN COALESCE(paid, 0) = 1 THEN 1 ELSE 0 END) as paid_count
+            FROM attendance
+            WHERE game_id = ? AND status = 'playing'
+        ''', (game_id,)).fetchone()
+
+        conn.commit()
+
+    if is_ajax:
+        total_playing = totals['total_playing'] if totals and totals['total_playing'] is not None else 0
+        paid_count = totals['paid_count'] if totals and totals['paid_count'] is not None else 0
+        return jsonify({
+            'ok': True,
+            'paid': paid,
+            'total_playing': total_playing,
+            'paid_count': paid_count,
+            'unpaid_count': max(total_playing - paid_count, 0)
+        })
+
+    return redirect(url_for('game_detail', game_id=game_id))
+
 @app.route('/games/<int:game_id>/bulk-remove', methods=['POST'])
 @login_required
 def bulk_remove_attendance(game_id):
