@@ -225,6 +225,36 @@
 
 <script>
     let lastPlayers = [];
+    const STORAGE_KEY = 'team_balancer_players';
+
+    function savePlayers() {
+        const data = [];
+        for (let i = 1; i <= 16; i++) {
+            data.push({
+                name: document.getElementById('name-' + i).value.trim(),
+                score: document.getElementById('score-' + i).value
+            });
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function loadPlayers() {
+        try {
+            const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
+            if (!data) return;
+            data.forEach((p, idx) => {
+                const i = idx + 1;
+                document.getElementById('name-' + i).value = p.name || '';
+                document.getElementById('score-' + i).value = p.score || '';
+            });
+        } catch (e) {}
+    }
+
+    // Save on every input change
+    document.getElementById('player-inputs').addEventListener('input', savePlayers);
+
+    // Load saved data on page load
+    window.addEventListener('DOMContentLoaded', loadPlayers);
 
     function getPlayers() {
         const players = [];
@@ -325,6 +355,7 @@
         document.getElementById('result').style.display = 'none';
         document.getElementById('shuffle-btn').style.display = 'none';
         lastPlayers = [];
+        localStorage.removeItem(STORAGE_KEY);
         document.getElementById('name-1').focus();
     }
 </script>
