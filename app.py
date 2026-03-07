@@ -57,6 +57,10 @@ def inject_build_version():
         'final_score_game_id': final_score_game_id
     }
 
+@app.route('/team-balancer')
+def team_balancer():
+    return render_template('team_balancer.html')
+
 # Simple health/version endpoints for smoke testing
 @app.route('/healthz')
 @app.route('/status')

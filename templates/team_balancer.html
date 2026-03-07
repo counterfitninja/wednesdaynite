@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+
+{% block title %}Team Balancer{% endblock %}
+
+{% block content %}
+<style>
+    .balancer-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+    @media (max-width: 768px) {
+        .balancer-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    .player-input {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+    }
+
+    .player-input input[type="text"] {
+        flex: 2;
+        min-width: 0;
+    }
+
+    .player-input input[type="number"] {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .player-num {
+        font-weight: 600;
+        color: #7f8c8d;
+        font-size: 0.85em;
+        min-width: 20px;
+        text-align: right;
+    }
+
+    .teams-output {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-top: 20px;
+    }
+
+    @media (max-width: 600px) {
+        .teams-output {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .team-card {
+        border-radius: 8px;
+        padding: 20px;
+        color: white;
+    }
+
+    .team-a {
+        background: #2980b9;
+    }
+
+    .team-b {
+        background: #27ae60;
+    }
+
+    .team-card h3 {
+        font-size: 1.3em;
+        margin-bottom: 12px;
+        border-bottom: 1px solid rgba(255,255,255,0.3);
+        padding-bottom: 8px;
+    }
+
+    .team-player {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.15);
+        font-size: 0.95em;
+    }
+
+    .team-player:last-child {
+        border-bottom: none;
+    }
+
+    .team-total {
+        margin-top: 12px;
+        padding-top: 8px;
+        border-top: 2px solid rgba(255,255,255,0.4);
+        font-weight: 700;
+        font-size: 1.05em;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .score-diff {
+        text-align: center;
+        margin-top: 15px;
+        font-size: 0.95em;
+        color: #7f8c8d;
+    }
+
+    .btn-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+    }
+
+    @media (max-width: 768px) {
+        .btn-row .btn {
+            flex: 1;
+        }
+    }
+</style>
+
+<div class="card">
+    <h2>Team Balancer</h2>
+    <p style="color:#7f8c8d; margin-bottom:20px;">Enter player names and skill scores (1-10), then generate balanced teams.</p>
+
+    <div class="balancer-grid" id="player-inputs">
+        {% for i in range(1, 17) %}
+        <div class="player-input">
+            <span class="player-num">{{ i }}.</span>
+            <input type="text" placeholder="Name" id="name-{{ i }}" autocomplete="off">
+            <input type="number" placeholder="Score" id="score-{{ i }}" min="1" max="10" step="0.5">
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="btn-row">
+        <button class="btn btn-success" onclick="generateTeams()">Generate Teams</button>
+        <button class="btn" onclick="clearAll()" style="background:#95a5a6;">Clear All</button>
+        <button class="btn" onclick="shuffleTeams()" id="shuffle-btn" style="display:none; background:#8e44ad;">Shuffle Again</button>
+    </div>
+
+    <div id="result" style="display:none;">
+        <div class="teams-output" id="teams-output"></div>
+        <p class="score-diff" id="score-diff"></p>
+    </div>
+</div>
+
+<script>
+    let lastPlayers = [];
+
+    function getPlayers() {
+        const players = [];
+        for (let i = 1; i <= 16; i++) {
+            const name = document.getElementById('name-' + i).value.trim();
+            const score = parseFloat(document.getElementById('score-' + i).value);
+            if (name && !isNaN(score) && score > 0) {
+                players.push({ name, score });
+            }
+        }
+        return players;
+    }
+
+    function balanceTeams(players) {
+        // Sort descending by score for snake draft
+        const sorted = [...players].sort((a, b) => b.score - a.score);
+        const teamA = [], teamB = [];
+        let sumA = 0, sumB = 0;
+
+        // Use a greedy approach: always add to the team with the lower total
+        for (const p of sorted) {
+            if (sumA <= sumB) {
+                teamA.push(p);
+                sumA += p.score;
+            } else {
+                teamB.push(p);
+                sumB += p.score;
+            }
+        }
+
+        return { teamA, teamB, sumA, sumB };
+    }
+
+    function renderTeams(teamA, teamB, sumA, sumB) {
+        const out = document.getElementById('teams-output');
+        out.innerHTML = `
+            <div class="team-card team-a">
+                <h3>Team A</h3>
+                ${teamA.map(p => `<div class="team-player"><span>${p.name}</span><span>${p.score}</span></div>`).join('')}
+                <div class="team-total"><span>Total</span><span>${sumA.toFixed(1)}</span></div>
+            </div>
+            <div class="team-card team-b">
+                <h3>Team B</h3>
+                ${teamB.map(p => `<div class="team-player"><span>${p.name}</span><span>${p.score}</span></div>`).join('')}
+                <div class="team-total"><span>Total</span><span>${sumB.toFixed(1)}</span></div>
+            </div>
+        `;
+
+        const diff = Math.abs(sumA - sumB).toFixed(1);
+        document.getElementById('score-diff').textContent = `Score difference: ${diff} point${diff === '0.0' ? '' : 's'}`;
+        document.getElementById('result').style.display = 'block';
+        document.getElementById('shuffle-btn').style.display = 'inline-block';
+    }
+
+    function generateTeams() {
+        const players = getPlayers();
+        if (players.length < 2) {
+            alert('Please enter at least 2 players with names and scores.');
+            return;
+        }
+        lastPlayers = players;
+        const { teamA, teamB, sumA, sumB } = balanceTeams(players);
+        renderTeams(teamA, teamB, sumA, sumB);
+    }
+
+    function shuffleTeams() {
+        if (lastPlayers.length < 2) return;
+
+        // Shuffle players of similar score to create variation
+        const shuffled = [...lastPlayers].sort((a, b) => {
+            const diff = b.score - a.score;
+            return diff !== 0 ? diff : (Math.random() - 0.5);
+        });
+
+        const teamA = [], teamB = [];
+        let sumA = 0, sumB = 0;
+
+        for (const p of shuffled) {
+            if (sumA <= sumB) {
+                teamA.push(p);
+                sumA += p.score;
+            } else {
+                teamB.push(p);
+                sumB += p.score;
+            }
+        }
+
+        renderTeams(teamA, teamB, sumA, sumB);
+    }
+
+    function clearAll() {
+        for (let i = 1; i <= 16; i++) {
+            document.getElementById('name-' + i).value = '';
+            document.getElementById('score-' + i).value = '';
+        }
+        document.getElementById('result').style.display = 'none';
+        document.getElementById('shuffle-btn').style.display = 'none';
+        lastPlayers = [];
+    }
+</script>
+{% endblock %}
