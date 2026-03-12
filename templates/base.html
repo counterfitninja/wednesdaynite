@@ -395,7 +395,12 @@
         .action-bar-btns {
             display: flex;
             gap: 8px;
-            flex-wrap: wrap;
+        }
+
+        .action-bar-btns .btn {
+            flex: 1;
+            text-align: center;
+            white-space: nowrap;
         }
 
         @media (max-width: 768px) {
@@ -404,23 +409,15 @@
                 align-items: stretch;
             }
             .action-bar-btns {
-                flex-wrap: wrap;
+                flex-direction: column;
             }
             .action-bar-btns .btn {
-                flex: 1;
-                min-width: calc(50% - 4px);
-                text-align: center;
-                white-space: nowrap;
+                flex: unset;
+                width: 100%;
+                min-width: unset;
             }
             header {
                 margin-bottom: 15px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .action-bar-btns .btn {
-                min-width: 100%;
-                flex: unset;
             }
         }
     </style>
