@@ -3,6 +3,32 @@
 {% block title %}Team Generator - Wednesday Night FC{% endblock %}
 
 {% block content %}
+<style>
+    .teams-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+    @media (max-width: 600px) {
+        .teams-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    .share-btns {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 15px;
+    }
+    @media (max-width: 600px) {
+        .share-btns .btn {
+            flex: 1;
+            min-width: calc(50% - 5px);
+            text-align: center;
+        }
+    }
+</style>
 {% if is_admin %}
 <a href="/games/{{ game.id }}" class="btn" style="margin-bottom: 20px;">← Back to Game</a>
 {% else %}
@@ -47,9 +73,9 @@
 {% else %}
 
 <div class="card">
-    <div style="margin-top: 15px;">
+    <div class="share-btns">
         <button onclick="shareToWhatsApp()" class="btn btn-success">
-            📱 Share Teams to WhatsApp
+            📱 Share to WhatsApp
         </button>
         <button onclick="shareToKeep()" class="btn" style="background-color: #607d8b;">
             ⌚ Share to Keep
@@ -57,7 +83,7 @@
     </div>
 </div>
 
-<div class="grid" style="grid-template-columns: repeat(2, 1fr);">
+<div class="teams-grid">
     <div class="card">
         <h2 style="color: #e91e63;">💗 Team 1</h2>
         <div class="stat">

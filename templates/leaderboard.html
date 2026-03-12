@@ -3,6 +3,20 @@
 {% block title %}Win Leaderboard - Wednesday Night FC{% endblock %}
 
 {% block content %}
+<style>
+    .leaderboard-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+    }
+    @media (max-width: 480px) {
+        .leaderboard-stats-grid {
+            grid-template-columns: 1fr;
+        }
+        .leaderboard-stats-grid .stat {
+            padding: 12px;
+        }
+    }
+</style>
 <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
     <a href="/" class="btn">← Back to Games</a>
     <a href="/help" class="btn">❓ Need help?</a>
@@ -280,7 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 <div class="card">
     <h3>📊 Statistics</h3>
-    <div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="leaderboard-stats-grid">
         <div class="stat">
             <div class="stat-value" style="color: #27ae60;">{{ total_games }}</div>
             <div class="stat-label">Games with Scores</div>

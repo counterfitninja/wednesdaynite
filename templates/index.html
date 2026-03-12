@@ -3,10 +3,15 @@
 {% block title %}Games - Wednesday Night FC{% endblock %}
 
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+<style>
+    @media (max-width: 600px) {
+        .col-location { display: none; }
+    }
+</style>
+<div class="action-bar">
     <h1>Upcoming Games</h1>
-    <div>
-        <a href="/help" class="btn">❓ Need help?</a>
+    <div class="action-bar-btns">
+        <a href="/help" class="btn">❓ Help</a>
         {% if is_admin %}
             <a href="/admin" class="btn btn-success">Admin Panel</a>
             <a href="/logout" class="btn">Logout</a>
@@ -28,7 +33,7 @@
         <thead>
             <tr>
                 <th>Date</th>
-                <th>Location</th>
+                <th class="col-location">Location</th>
                 <th>Players</th>
                 <th>Score</th>
                 <th>Action</th>
@@ -38,7 +43,7 @@
             {% for game in games %}
             <tr>
                 <td><strong>{{ game.date|ukdate }}</strong></td>
-                <td>{{ game.location or 'N/A' }}</td>
+                <td class="col-location">{{ game.location or 'N/A' }}</td>
                 <td>
                     {% if game.is_abandoned %}
                         <span class="badge" style="background-color: #7f8c8d;">Abandoned</span>

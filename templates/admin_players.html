@@ -3,13 +3,29 @@
 {% block title %}Admin - Players{% endblock %}
 
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-    <h1>Admin - Manage Players</h1>
-    <div>
-        <a href="/help" class="btn">❓ Need help?</a>
+<style>
+    @media (max-width: 768px) {
+        .merge-selects {
+            grid-template-columns: 1fr !important;
+        }
+        /* Hide less critical columns on mobile */
+        .col-phone, .col-total-games, .col-paid-total { display: none; }
+        td.actions-cell .btn, td.actions-cell button {
+            display: inline-flex !important;
+            padding: 6px 10px !important;
+            font-size: 0.8em !important;
+            min-height: 36px !important;
+            margin-bottom: 4px;
+        }
+    }
+</style>
+<div class="action-bar">
+    <h1>Admin - Players</h1>
+    <div class="action-bar-btns">
+        <a href="/help" class="btn">❓ Help</a>
         <a href="/admin/games" class="btn">Games</a>
-        <a href="/players/add" class="btn btn-success">➕ Add Player</a>
-        <button onclick="toggleMergeMode()" class="btn" style="background: #f39c12;">🔀 Merge Players</button>
+        <a href="/players/add" class="btn btn-success">➕ Add</a>
+        <button onclick="toggleMergeMode()" class="btn" style="background: #f39c12;">🔀 Merge</button>
         <a href="/logout" class="btn">Logout</a>
     </div>
 </div>
@@ -18,7 +34,7 @@
     <h3 style="color: #856404;">🔀 Merge Players</h3>
     <p style="color: #856404; margin-bottom: 15px;">Merge duplicate players (e.g., wrong spelling). All attendance records from the source player will be moved to the target player, then the source player will be deleted.</p>
     <form method="POST" action="/players/merge" onsubmit="return confirmMerge();">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+        <div class="merge-selects" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
             <div class="form-group">
                 <label style="color: #856404;"><strong>Source Player (will be deleted)</strong></label>
                 <select name="source_player_id" required style="width: 100%; padding: 8px;">
@@ -72,13 +88,13 @@ function confirmMerge() {
         <thead>
             <tr>
                 <th>Name</th>
-                <th>Phone</th>
-                <th>Skill Rating</th>
+                <th class="col-phone">Phone</th>
+                <th>Skill</th>
                 <th>Payment</th>
-                <th>Games Played</th>
-                <th>Paid Total</th>
-                <th>Total Games</th>
-                <th>Attendance Rate</th>
+                <th>Played</th>
+                <th class="col-paid-total">Paid Total</th>
+                <th class="col-total-games">Total</th>
+                <th>Attend%</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -91,7 +107,7 @@ function confirmMerge() {
             {% set payment_matches = is_exempt or (paid_games == expected_games) %}
             <tr>
                 <td><strong>{{ player.name }}</strong></td>
-                <td>{{ player.phone or 'N/A' }}</td>
+                <td class="col-phone">{{ player.phone or 'N/A' }}</td>
                 <td>
                     <span class="badge" style="background-color: #3498db;">{{ player.skill_rating or 3 }}/5</span>
                 </td>
@@ -103,12 +119,9 @@ function confirmMerge() {
                     {% endif %}
                 </td>
                 <td><strong>{{ player.games_played }}</strong></td>
-                <td>
+                <td class="col-paid-total">
                     {% if is_exempt %}
                     <span class="badge" style="background-color: #7f8c8d;">Exempt</span>
-                    <div style="font-size: 0.8em; color: #7f8c8d; margin-top: 4px;">
-                        Not required to pay
-                    </div>
                     {% else %}
                     <span class="badge" style="background-color: {% if payment_matches %}#27ae60{% else %}#e74c3c{% endif %};">
                         £{{ "%.2f"|format(paid_total) }}
@@ -118,7 +131,7 @@ function confirmMerge() {
                     </div>
                     {% endif %}
                 </td>
-                <td>{{ player.total_games }}</td>
+                <td class="col-total-games">{{ player.total_games }}</td>
                 <td>
                     {% if player.attendance_rate >= 75 %}
                         <span class="badge badge-success">{{ "%.1f"|format(player.attendance_rate) }}%</span>
@@ -128,7 +141,7 @@ function confirmMerge() {
                         <span class="badge badge-danger">{{ "%.1f"|format(player.attendance_rate) }}%</span>
                     {% endif %}
                 </td>
-                <td>
+                <td class="actions-cell">
                     <a href="/players/{{ player.id }}/payments" class="btn" style="padding: 5px 10px; font-size: 0.9em; margin-right: 5px; background-color: #2c3e50;">Payments</a>
                     <a href="/players/{{ player.id }}/edit" class="btn" style="padding: 5px 10px; font-size: 0.9em; margin-right: 5px;">Edit</a>
                     <form action="/players/{{ player.id }}/delete" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete {{ player.name }}? This will also delete all their attendance records.');">
