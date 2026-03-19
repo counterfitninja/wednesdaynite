@@ -1376,7 +1376,7 @@ def bulk_attendance(game_id):
         return redirect(url_for('game_detail', game_id=game_id))
     
     # Split by newlines and clean up
-    playing_names = [name.strip() for name in players_text.split('\n') if name.strip()]
+    playing_names = [name.strip().replace('-', '').strip() for name in players_text.split('\n') if name.strip()]
     
     with get_db() as conn:
         # Get all players

@@ -210,10 +210,11 @@ function addSelectedPlayers() {
     // Get existing names in textarea
     const existing = textarea.value.trim().split('\n').filter(name => name.trim());
     
-    // Add selected names that aren't already in the list
+    // Add selected names that aren't already in the list (strip hyphens and whitespace)
     selected.forEach(name => {
-        if (!existing.includes(name)) {
-            existing.push(name);
+        const cleaned = name.replace(/-/g, '').trim();
+        if (!existing.includes(cleaned)) {
+            existing.push(cleaned);
         }
     });
     
@@ -222,6 +223,20 @@ function addSelectedPlayers() {
     
     // Clear selection
     select.selectedIndex = -1;
+}
+
+// Sanitize textarea: remove hyphens and trim whitespace from each line on paste/input
+const playersTextarea = document.getElementById('players_text');
+if (playersTextarea) {
+    playersTextarea.addEventListener('input', function() {
+        const pos = this.selectionStart;
+        const lines = this.value.split('\n').map(line => line.replace(/-/g, '').trim());
+        const cleaned = lines.join('\n');
+        if (cleaned !== this.value) {
+            this.value = cleaned;
+            this.selectionStart = this.selectionEnd = pos;
+        }
+    });
 }
 
 const unpaidOnlyToggle = document.getElementById('show-unpaid-only');
