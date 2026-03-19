@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}{{ player.name|name_initial }} – Game Stats {{ year }} – Wednesday Night FC{% endblock %}
+
+{% block content %}
+<div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+    <a href="/leaderboard" class="btn">← Back to Leaderboard</a>
+</div>
+
+{% set wins = games | selectattr('result', 'equalto', 'win') | list | length %}
+{% set draws = games | selectattr('result', 'equalto', 'draw') | list | length %}
+{% set losses = games | selectattr('result', 'equalto', 'loss') | list | length %}
+{% set total = games | length %}
+
+<div class="card">
+    <h1>{{ player.name|name_initial }}</h1>
+    <p style="color: #7f8c8d;">Game results for {{ year }}</p>
+    <div style="display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap;">
+        <span class="badge badge-success" style="font-size: 1.1em; padding: 8px 14px;">{{ wins }} W</span>
+        <span class="badge" style="background:#95a5a6; font-size: 1.1em; padding: 8px 14px;">{{ draws }} D</span>
+        <span class="badge badge-danger" style="font-size: 1.1em; padding: 8px 14px;">{{ losses }} L</span>
+        {% if total > 0 %}
+        <span class="badge" style="background:#3498db; font-size: 1.1em; padding: 8px 14px;">{{ (wins / total * 100) | round(1) }}% win rate</span>
+        {% endif %}
+    </div>
+</div>
+
+{% if games %}
+<div class="card">
+    <h2>Game History</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th style="text-align: center;">Score</th>
+                <th style="text-align: center;">Result</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for g in games %}
+            <tr>
+                <td>
+                    <a href="/games/{{ g.id }}" style="color: #3498db; text-decoration: none;">
+                        {{ g.date }}
+                    </a>
+                </td>
+                <td style="text-align: center; font-weight: bold;">
+                    {{ g.player_score }} – {{ g.opponent_score }}
+                </td>
+                <td style="text-align: center;">
+                    {% if g.result == 'win' %}
+                        <span class="badge badge-success">Win</span>
+                    {% elif g.result == 'draw' %}
+                        <span class="badge" style="background:#95a5a6;">Draw</span>
+                    {% else %}
+                        <span class="badge badge-danger">Loss</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card">
+    <p style="text-align: center; color: #7f8c8d; padding: 40px;">
+        No scored games found for {{ year }}.
+    </p>
+</div>
+{% endif %}
+{% endblock %}

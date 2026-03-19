@@ -222,7 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <strong>#{{ loop.index }}</strong>
                     {% endif %}
                 </td>
-                <td><strong>{{ player.name|name_initial }}</strong></td>
+                <td><a href="/players/{{ player.id }}/stats" style="color: #2c3e50; text-decoration: none;"><strong>{{ player.name|name_initial }}</strong></a></td>
                 <td style="text-align: center;">
                     <span class="badge badge-success">{{ player.wins }}</span>
                 </td>

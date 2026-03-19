@@ -619,6 +619,7 @@ def leaderboard():
         for row in leaderboard_data:
             win_pct = round((row['wins'] / row['total_games'] * 100) if row['total_games'] > 0 else 0, 1)
             leaderboard.append({
+                'id': row['id'],
                 'name': row['name'],
                 'wins': row['wins'],
                 'draws': row['draws'],
@@ -682,6 +683,47 @@ def leaderboard():
                          total_players=len(leaderboard),
                          year=current_year,
                          final_score_game_id=final_score_target['id'] if final_score_target else None)
+
+@app.route('/players/<int:player_id>/stats')
+def player_stats(player_id):
+    from datetime import datetime
+    current_year = datetime.now().year
+
+    with get_db() as conn:
+        player = conn.execute('SELECT id, name FROM players WHERE id = ?', (player_id,)).fetchone()
+        if not player:
+            return "Player not found", 404
+
+        games = conn.execute('''
+            SELECT
+                g.id,
+                g.date,
+                g.team1_score,
+                g.team2_score,
+                ta.team_number,
+                CASE
+                    WHEN (ta.team_number = 1 AND g.team1_score > g.team2_score) OR
+                         (ta.team_number = 2 AND g.team2_score > g.team1_score)
+                    THEN 'win'
+                    WHEN g.team1_score = g.team2_score
+                    THEN 'draw'
+                    ELSE 'loss'
+                END as result,
+                CASE WHEN ta.team_number = 1 THEN g.team1_score ELSE g.team2_score END as player_score,
+                CASE WHEN ta.team_number = 1 THEN g.team2_score ELSE g.team1_score END as opponent_score
+            FROM games g
+            JOIN team_assignments ta ON g.id = ta.game_id AND ta.player_id = ?
+            WHERE g.team1_score IS NOT NULL
+                AND g.team2_score IS NOT NULL
+                AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+                AND strftime('%Y', g.date) = ?
+            ORDER BY g.date DESC
+        ''', (player_id, str(current_year))).fetchall()
+
+    return render_template('player_stats.html',
+                           player=player,
+                           games=games,
+                           year=current_year)
 
 @app.route('/help')
 def help_page():
