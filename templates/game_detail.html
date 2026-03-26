@@ -18,10 +18,6 @@
     <a href="/" class="btn">← Back</a>
     <div class="action-bar-btns">
         <a href="/help" class="btn">❓ Help</a>
-        {% if playing|length >= 2 and not game.is_abandoned %}
-        <a href="/games/{{ game.id }}/teams" class="btn btn-success">🎲 Teams</a>
-        <a href="/games/{{ game.id }}/teams/manual" class="btn" style="background-color: #9b59b6;">✏️ Manual</a>
-        {% endif %}
     </div>
 </div>
 

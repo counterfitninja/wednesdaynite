@@ -66,10 +66,7 @@
                 <td class="actions-cell">
                     <a href="/games/{{ game.id }}" class="btn" style="padding: 5px 10px; font-size: 0.9em; margin-right: 5px;">Manage</a>
                     <a href="/games/{{ game.id }}/edit" class="btn" style="padding: 5px 10px; font-size: 0.9em; margin-right: 5px; background-color: #3498db;">Edit</a>
-                    {% if game.players_count >= 2 and not game.is_abandoned %}
-                    <a href="/games/{{ game.id }}/teams" class="btn btn-success" style="padding: 5px 10px; font-size: 0.9em; margin-right: 5px;">Teams</a>
-                    {% endif %}
-                    {% if game.is_abandoned %}
+{% if game.is_abandoned %}
                     <form action="/games/{{ game.id }}/abandoned" method="POST" style="display: inline;" onsubmit="return confirm('Restore this game from abandoned status?');">
                         <input type="hidden" name="abandoned" value="0">
                         <button type="submit" class="btn" style="padding: 5px 10px; font-size: 0.9em; margin-right: 5px; background-color: #95a5a6;">Restore</button>
