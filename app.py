@@ -1415,6 +1415,45 @@ def bulk_attendance(game_id):
     
     return redirect(url_for('game_detail', game_id=game_id))
 
+@app.route('/games/<int:game_id>/bulk-attendance-confirm', methods=['POST'])
+@login_required
+def bulk_attendance_confirm(game_id):
+    player_ids = request.form.getlist('player_ids')
+    new_names = request.form.getlist('new_names')
+
+    with get_db() as conn:
+        for pid in player_ids:
+            try:
+                conn.execute('''
+                    INSERT INTO attendance (game_id, player_id, status)
+                    VALUES (?, ?, 'playing')
+                    ON CONFLICT(game_id, player_id)
+                    DO UPDATE SET status = 'playing'
+                ''', (game_id, int(pid)))
+            except Exception:
+                continue
+
+        for name in new_names:
+            name = name.strip()
+            if not name:
+                continue
+            try:
+                cursor = conn.execute('INSERT INTO players (name, skill_rating) VALUES (?, ?)', (name, 3))
+                new_id = cursor.lastrowid
+                conn.execute('''
+                    INSERT INTO attendance (game_id, player_id, status)
+                    VALUES (?, ?, 'playing')
+                    ON CONFLICT(game_id, player_id)
+                    DO UPDATE SET status = 'playing'
+                ''', (game_id, new_id))
+            except Exception:
+                continue
+
+        conn.commit()
+
+    return redirect(url_for('game_detail', game_id=game_id))
+
+
 @app.route('/import', methods=['GET', 'POST'])
 @login_required
 def import_csv():
