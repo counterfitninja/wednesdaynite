@@ -1002,7 +1002,7 @@ def game_detail(game_id):
             ORDER BY a.status, p.name
         ''', (game_id,)).fetchall()
         
-        all_players = conn.execute('SELECT * FROM players ORDER BY name').fetchall()
+        all_players = [dict(r) for r in conn.execute('SELECT * FROM players ORDER BY name').fetchall()]
 
         payment_amount_setting = conn.execute(
             "SELECT value FROM settings WHERE key = 'weekly_payment_amount'"
