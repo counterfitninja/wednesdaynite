@@ -74,6 +74,8 @@
                 <td>
                     {% if is_admin %}
                         <a href="/games/{{ game.id }}" class="btn">Manage</a>
+                    {% else %}
+                        <a href="/games/{{ game.id }}/teams" class="btn">View Teams</a>
                     {% endif %}
                 </td>
             </tr>

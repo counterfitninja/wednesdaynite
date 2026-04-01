@@ -57,6 +57,10 @@ def inject_build_version():
         'final_score_game_id': final_score_game_id
     }
 
+@app.route('/team-balancer')
+def team_balancer():
+    return render_template('team_balancer.html')
+
 # Simple health/version endpoints for smoke testing
 @app.route('/healthz')
 @app.route('/status')
@@ -1019,6 +1023,239 @@ def game_detail(game_id):
                          maybe=maybe,
                          all_players=all_players,
                          weekly_payment_amount=weekly_payment_amount)
+
+@app.route('/games/<int:game_id>/teams')
+def generate_teams(game_id):
+    import random
+
+    with get_db() as conn:
+        game = conn.execute('SELECT * FROM games WHERE id = ?', (game_id,)).fetchone()
+
+        if not game:
+            return "Game not found", 404
+
+        # Check if team_assignments table exists, if not create it
+        try:
+            conn.execute('SELECT 1 FROM team_assignments LIMIT 1')
+        except:
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS team_assignments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    game_id INTEGER NOT NULL,
+                    player_id INTEGER NOT NULL,
+                    team_number INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (game_id) REFERENCES games(id),
+                    FOREIGN KEY (player_id) REFERENCES players(id),
+                    UNIQUE(game_id, player_id)
+                )
+            ''')
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_team_assignments_game ON team_assignments(game_id)')
+            conn.commit()
+
+        # Check if teams have already been generated for this game
+        existing_teams = conn.execute('''
+            SELECT p.*, ta.team_number
+            FROM team_assignments ta
+            JOIN players p ON ta.player_id = p.id
+            WHERE ta.game_id = ?
+            ORDER BY ta.team_number, p.name
+        ''', (game_id,)).fetchall()
+
+        if existing_teams:
+            team1 = [dict(p) for p in existing_teams if p['team_number'] == 1]
+            team2 = [dict(p) for p in existing_teams if p['team_number'] == 2]
+
+            return render_template('teams.html',
+                                 game=game,
+                                 team1=team1,
+                                 team2=team2,
+                                 teams_generated=True,
+                                 is_admin=session.get('logged_in'))
+
+        if not session.get('logged_in'):
+            return render_template('teams.html',
+                                 game=game,
+                                 teams_generated=False,
+                                 is_admin=False)
+
+        # Admin user - generate teams
+        playing = conn.execute('''
+            SELECT p.*, a.status
+            FROM attendance a
+            JOIN players p ON a.player_id = p.id
+            WHERE a.game_id = ? AND a.status = 'playing'
+            ORDER BY p.name
+        ''', (game_id,)).fetchall()
+
+        if len(playing) < 2:
+            return render_template('teams.html', game=game, error='Need at least 2 players to create teams', is_admin=True, teams_generated=False)
+
+        players_list = [dict(player) for player in playing]
+        players_list.sort(key=lambda x: x.get('skill_rating', 5), reverse=True)
+
+        from itertools import groupby
+        shuffled_list = []
+        for _, group in groupby(players_list, key=lambda x: x.get('skill_rating', 5)):
+            group_list = list(group)
+            random.shuffle(group_list)
+            shuffled_list.extend(group_list)
+
+        team1 = []
+        team2 = []
+
+        for i, player in enumerate(shuffled_list):
+            if i % 4 == 0 or i % 4 == 3:
+                team1.append(player)
+            else:
+                team2.append(player)
+
+        for player in team1:
+            conn.execute('''
+                INSERT INTO team_assignments (game_id, player_id, team_number)
+                VALUES (?, ?, 1)
+                ON CONFLICT(game_id, player_id) DO UPDATE SET team_number = 1
+            ''', (game_id, player['id']))
+
+        for player in team2:
+            conn.execute('''
+                INSERT INTO team_assignments (game_id, player_id, team_number)
+                VALUES (?, ?, 2)
+                ON CONFLICT(game_id, player_id) DO UPDATE SET team_number = 2
+            ''', (game_id, player['id']))
+
+        conn.commit()
+
+        return render_template('teams.html',
+                             game=game,
+                             team1=team1,
+                             team2=team2,
+                             teams_generated=True,
+                             is_admin=session.get('logged_in'))
+
+
+@app.route('/games/<int:game_id>/teams/regenerate', methods=['POST'])
+@login_required
+def regenerate_teams(game_id):
+    with get_db() as conn:
+        conn.execute('DELETE FROM team_assignments WHERE game_id = ?', (game_id,))
+        conn.commit()
+
+    return redirect(url_for('generate_teams', game_id=game_id))
+
+
+@app.route('/games/<int:game_id>/teams/manual', methods=['GET', 'POST'])
+@login_required
+def manual_teams(game_id):
+    with get_db() as conn:
+        game = conn.execute('SELECT * FROM games WHERE id = ?', (game_id,)).fetchone()
+
+        if not game:
+            return "Game not found", 404
+
+        try:
+            conn.execute('SELECT 1 FROM team_assignments LIMIT 1')
+        except:
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS team_assignments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    game_id INTEGER NOT NULL,
+                    player_id INTEGER NOT NULL,
+                    team_number INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (game_id) REFERENCES games(id),
+                    FOREIGN KEY (player_id) REFERENCES players(id),
+                    UNIQUE(game_id, player_id)
+                )
+            ''')
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_team_assignments_game ON team_assignments(game_id)')
+            conn.commit()
+
+        if request.method == 'POST':
+            team1_ids = request.form.getlist('team1_players')
+            team2_ids = request.form.getlist('team2_players')
+
+            conn.execute('DELETE FROM team_assignments WHERE game_id = ?', (game_id,))
+
+            for player_id in team1_ids:
+                conn.execute('''
+                    INSERT INTO team_assignments (game_id, player_id, team_number)
+                    VALUES (?, ?, 1)
+                ''', (game_id, player_id))
+
+            for player_id in team2_ids:
+                conn.execute('''
+                    INSERT INTO team_assignments (game_id, player_id, team_number)
+                    VALUES (?, ?, 2)
+                ''', (game_id, player_id))
+
+            conn.commit()
+
+            return redirect(url_for('generate_teams', game_id=game_id))
+
+        playing = conn.execute('''
+            SELECT p.*
+            FROM attendance a
+            JOIN players p ON a.player_id = p.id
+            WHERE a.game_id = ? AND a.status = 'playing'
+            ORDER BY p.name
+        ''', (game_id,)).fetchall()
+
+        existing_teams = conn.execute('''
+            SELECT p.*, ta.team_number
+            FROM team_assignments ta
+            JOIN players p ON ta.player_id = p.id
+            WHERE ta.game_id = ?
+            ORDER BY ta.team_number, p.name
+        ''', (game_id,)).fetchall()
+
+        if existing_teams:
+            team1 = [dict(p) for p in existing_teams if p['team_number'] == 1]
+            team2 = [dict(p) for p in existing_teams if p['team_number'] == 2]
+            assigned_ids = {p['id'] for p in existing_teams}
+            unassigned = [dict(p) for p in playing if p['id'] not in assigned_ids]
+        else:
+            team1 = []
+            team2 = []
+            unassigned = [dict(p) for p in playing]
+
+        return render_template('teams_manual.html',
+                             game=game,
+                             team1=team1,
+                             team2=team2,
+                             unassigned=unassigned)
+
+
+@app.route('/games/<int:game_id>/teams/watch')
+def teams_watch_view(game_id):
+    with get_db() as conn:
+        game = conn.execute('SELECT * FROM games WHERE id = ?', (game_id,)).fetchone()
+
+        if not game:
+            return "Game not found", 404
+
+        try:
+            existing_teams = conn.execute('''
+                SELECT p.*, ta.team_number
+                FROM team_assignments ta
+                JOIN players p ON ta.player_id = p.id
+                WHERE ta.game_id = ?
+                ORDER BY ta.team_number, p.name
+            ''', (game_id,)).fetchall()
+
+            if not existing_teams:
+                return "No teams generated yet", 404
+
+            team1 = [dict(p) for p in existing_teams if p['team_number'] == 1]
+            team2 = [dict(p) for p in existing_teams if p['team_number'] == 2]
+
+            return render_template('teams_watch.html',
+                                 game=game,
+                                 team1=team1,
+                                 team2=team2)
+        except:
+            return "No teams generated yet", 404
+
 
 @app.route('/games/<int:game_id>/attendance', methods=['POST'])
 @login_required

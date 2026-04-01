@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Teams - {{ game.date|ukdate }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 10px;
+            font-size: 18px;
+            line-height: 1.4;
+        }
+        
+        .date {
+            text-align: center;
+            font-size: 16px;
+            color: #999;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+        }
+        
+        .team {
+            margin-bottom: 20px;
+        }
+        
+        .team-header {
+            font-size: 22px;
+            font-weight: bold;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        
+        .team-pink .team-header {
+            background-color: #e91e63;
+            color: #fff;
+        }
+        
+        .team-yellow .team-header {
+            background-color: #ffc107;
+            color: #000;
+        }
+        
+        .player {
+            font-size: 20px;
+            padding: 10px;
+            margin: 4px 0;
+            background-color: #1a1a1a;
+            border-radius: 4px;
+            border-left: 4px solid transparent;
+        }
+        
+        .team-pink .player {
+            border-left-color: #e91e63;
+        }
+        
+        .team-yellow .player {
+            border-left-color: #ffc107;
+        }
+        
+        .count {
+            font-size: 16px;
+            color: #999;
+            text-align: center;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="date">{{ game.date|ukdate }}</div>
+    
+    <div class="team team-pink">
+        <div class="team-header">PINK</div>
+        {% for player in team1 %}
+        <div class="player">{% if is_admin %}{{ player.name|name_initial }}{% else %}{{ player.name.split()[0] }}{% endif %}</div>
+        {% endfor %}
+        <div class="count">{{ team1|length }} players</div>
+    </div>
+    
+    <div class="team team-yellow">
+        <div class="team-header">YELLOW</div>
+        {% for player in team2 %}
+        <div class="player">{% if is_admin %}{{ player.name|name_initial }}{% else %}{{ player.name.split()[0] }}{% endif %}</div>
+        {% endfor %}
+        <div class="count">{{ team2|length }} players</div>
+    </div>
+</body>
+</html>

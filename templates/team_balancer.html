@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+
+{% block title %}Team Balancer{% endblock %}
+
+{% block content %}
+<style>
+    /* ── Player input grid ── */
+    .balancer-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-bottom: 20px;
+    }
+
+    .player-input {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        background: #f8f9fa;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 6px 8px;
+    }
+
+    .player-num {
+        font-weight: 700;
+        color: #bdc3c7;
+        font-size: 0.78em;
+        min-width: 18px;
+        text-align: right;
+        flex-shrink: 0;
+    }
+
+    .player-input input {
+        border: none;
+        background: transparent;
+        padding: 4px 2px;
+        font-size: 0.9em;
+        outline: none;
+        color: #333;
+    }
+
+    .player-input input[type="text"] {
+        flex: 3;
+        min-width: 0;
+    }
+
+    .player-input input[type="number"] {
+        flex: 1;
+        min-width: 36px;
+        text-align: center;
+        font-weight: 600;
+        color: #2980b9;
+    }
+
+    .player-input input::placeholder {
+        color: #bdc3c7;
+    }
+
+    .player-input:focus-within {
+        border-color: #3498db;
+        background: #fff;
+        box-shadow: 0 0 0 2px rgba(52,152,219,0.15);
+    }
+
+    /* ── Buttons ── */
+    .btn-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+    /* ── Teams output ── */
+    .teams-output {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin-top: 5px;
+    }
+
+    .team-card {
+        border-radius: 10px;
+        padding: 18px;
+        color: white;
+    }
+
+    .team-a { background: linear-gradient(135deg, #2980b9, #1a5276); }
+    .team-b { background: linear-gradient(135deg, #27ae60, #1a6e3c); }
+
+    .team-card h3 {
+        font-size: 1.2em;
+        margin-bottom: 12px;
+        border-bottom: 1px solid rgba(255,255,255,0.3);
+        padding-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .team-count {
+        font-size: 0.75em;
+        opacity: 0.8;
+        font-weight: 400;
+    }
+
+    .team-player {
+        display: flex;
+        justify-content: space-between;
+        padding: 7px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.12);
+        font-size: 0.92em;
+    }
+
+    .team-player:last-child { border-bottom: none; }
+
+    .team-player-score {
+        background: rgba(255,255,255,0.2);
+        border-radius: 10px;
+        padding: 1px 8px;
+        font-size: 0.85em;
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+
+    .team-total {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 2px solid rgba(255,255,255,0.35);
+        font-weight: 700;
+        font-size: 1.05em;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .score-diff {
+        text-align: center;
+        margin-top: 15px;
+        font-size: 0.9em;
+        color: #7f8c8d;
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 6px;
+    }
+
+    .score-diff.balanced {
+        background: #d4edda;
+        color: #155724;
+        font-weight: 600;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+        .balancer-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 600px) {
+        .balancer-grid { grid-template-columns: 1fr; }
+
+        .player-input {
+            padding: 10px 10px;
+        }
+
+        .player-input input {
+            font-size: 16px; /* prevent iOS zoom */
+            padding: 4px;
+        }
+
+        .player-input input[type="number"] {
+            min-width: 48px;
+        }
+
+        .player-num {
+            font-size: 0.85em;
+            min-width: 22px;
+        }
+
+        .btn-row {
+            flex-direction: column;
+        }
+
+        .btn-row .btn {
+            width: 100%;
+            text-align: center;
+            font-size: 16px !important;
+            padding: 14px !important;
+            min-height: 48px;
+        }
+
+        .teams-output {
+            grid-template-columns: 1fr;
+        }
+
+        .team-card {
+            padding: 15px;
+        }
+    }
+</style>
+
+<div class="card">
+    <h2>Team Balancer</h2>
+    <p style="color:#7f8c8d; margin-bottom:20px; font-size:0.95em;">Enter names and skill scores (1–10), then tap Generate to get balanced teams.</p>
+
+    <div class="balancer-grid" id="player-inputs">
+        {% for i in range(1, 17) %}
+        <div class="player-input">
+            <span class="player-num">{{ i }}</span>
+            <input type="text" placeholder="Name" id="name-{{ i }}" autocomplete="off" autocorrect="off" autocapitalize="words">
+            <input type="number" placeholder="–" id="score-{{ i }}" min="1" max="10" step="0.5" inputmode="decimal">
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="btn-row">
+        <button class="btn btn-success" onclick="generateTeams()" style="flex:2;">Generate Teams</button>
+        <button class="btn" onclick="clearAll()" style="background:#95a5a6; flex:1;">Clear</button>
+        <button class="btn" onclick="shuffleTeams()" id="shuffle-btn" style="display:none; background:#8e44ad; flex:1;">Shuffle</button>
+    </div>
+
+    <div id="result" style="display:none;">
+        <div class="teams-output" id="teams-output"></div>
+        <p class="score-diff" id="score-diff"></p>
+    </div>
+</div>
+
+<script>
+    let lastPlayers = [];
+    const STORAGE_KEY = 'team_balancer_players';
+
+    function savePlayers() {
+        const data = [];
+        for (let i = 1; i <= 16; i++) {
+            data.push({
+                name: document.getElementById('name-' + i).value.trim(),
+                score: document.getElementById('score-' + i).value
+            });
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function loadPlayers() {
+        try {
+            const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
+            if (!data) return;
+            data.forEach((p, idx) => {
+                const i = idx + 1;
+                document.getElementById('name-' + i).value = p.name || '';
+                document.getElementById('score-' + i).value = p.score || '';
+            });
+        } catch (e) {}
+    }
+
+    // Save on every input change
+    document.getElementById('player-inputs').addEventListener('input', savePlayers);
+
+    // Load saved data on page load
+    window.addEventListener('DOMContentLoaded', loadPlayers);
+
+    function getPlayers() {
+        const players = [];
+        for (let i = 1; i <= 16; i++) {
+            const name = document.getElementById('name-' + i).value.trim();
+            const score = parseFloat(document.getElementById('score-' + i).value);
+            if (name && !isNaN(score) && score > 0) {
+                players.push({ name, score });
+            }
+        }
+        return players;
+    }
+
+    function balanceTeams(players) {
+        const sorted = [...players].sort((a, b) => b.score - a.score);
+        const teamA = [], teamB = [];
+        let sumA = 0, sumB = 0;
+        for (const p of sorted) {
+            if (sumA <= sumB) { teamA.push(p); sumA += p.score; }
+            else              { teamB.push(p); sumB += p.score; }
+        }
+        return { teamA, teamB, sumA, sumB };
+    }
+
+    function renderTeams(teamA, teamB, sumA, sumB) {
+        const out = document.getElementById('teams-output');
+        out.innerHTML = `
+            <div class="team-card team-a">
+                <h3>Team A <span class="team-count">${teamA.length} players</span></h3>
+                ${teamA.map(p => `
+                    <div class="team-player">
+                        <span>${p.name}</span>
+                        <span class="team-player-score">${p.score}</span>
+                    </div>`).join('')}
+                <div class="team-total"><span>Total score</span><span>${sumA.toFixed(1)}</span></div>
+            </div>
+            <div class="team-card team-b">
+                <h3>Team B <span class="team-count">${teamB.length} players</span></h3>
+                ${teamB.map(p => `
+                    <div class="team-player">
+                        <span>${p.name}</span>
+                        <span class="team-player-score">${p.score}</span>
+                    </div>`).join('')}
+                <div class="team-total"><span>Total score</span><span>${sumB.toFixed(1)}</span></div>
+            </div>
+        `;
+
+        const diff = Math.abs(sumA - sumB);
+        const diffEl = document.getElementById('score-diff');
+        if (diff === 0) {
+            diffEl.textContent = 'Perfectly balanced!';
+            diffEl.className = 'score-diff balanced';
+        } else {
+            diffEl.textContent = `Score difference: ${diff.toFixed(1)} point${diff === 1 ? '' : 's'}`;
+            diffEl.className = 'score-diff';
+        }
+
+        document.getElementById('result').style.display = 'block';
+        document.getElementById('shuffle-btn').style.display = '';
+
+        // Scroll to results on mobile
+        if (window.innerWidth <= 600) {
+            document.getElementById('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    function generateTeams() {
+        const players = getPlayers();
+        if (players.length < 2) {
+            alert('Please enter at least 2 players with names and scores.');
+            return;
+        }
+        lastPlayers = players;
+        const { teamA, teamB, sumA, sumB } = balanceTeams(players);
+        renderTeams(teamA, teamB, sumA, sumB);
+    }
+
+    function shuffleTeams() {
+        if (lastPlayers.length < 2) return;
+        const shuffled = [...lastPlayers].sort((a, b) => {
+            const diff = b.score - a.score;
+            return diff !== 0 ? diff : (Math.random() - 0.5);
+        });
+        const teamA = [], teamB = [];
+        let sumA = 0, sumB = 0;
+        for (const p of shuffled) {
+            if (sumA <= sumB) { teamA.push(p); sumA += p.score; }
+            else              { teamB.push(p); sumB += p.score; }
+        }
+        renderTeams(teamA, teamB, sumA, sumB);
+    }
+
+    function clearAll() {
+        for (let i = 1; i <= 16; i++) {
+            document.getElementById('name-' + i).value = '';
+            document.getElementById('score-' + i).value = '';
+        }
+        document.getElementById('result').style.display = 'none';
+        document.getElementById('shuffle-btn').style.display = 'none';
+        lastPlayers = [];
+        localStorage.removeItem(STORAGE_KEY);
+        document.getElementById('name-1').focus();
+    }
+</script>
+{% endblock %}
