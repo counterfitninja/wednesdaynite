@@ -126,7 +126,7 @@ function sortWinsTable(column) {
     winsSortState.column = column;
 
     const rows = Array.from(tbody.querySelectorAll('tr'));
-    const numericColumns = ['wins', 'draws', 'losses', 'total_games', 'win_percentage'];
+    const numericColumns = ['wins', 'draws', 'losses', 'total_games', 'win_percentage', 'loss_percentage', 'non_loss_percentage'];
 
     rows.sort((a, b) => {
         const rawA = a.dataset[column] || '';
@@ -206,11 +206,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 <th data-sort-col="losses" onclick="sortWinsTable('losses')" style="text-align: center; cursor: pointer; user-select: none;">Losses<span class="sort-indicator"></span></th>
                 <th data-sort-col="total_games" onclick="sortWinsTable('total_games')" style="text-align: center; cursor: pointer; user-select: none;">Games<span class="sort-indicator"></span></th>
                 <th data-sort-col="win_percentage" onclick="sortWinsTable('win_percentage')" style="text-align: center; cursor: pointer; user-select: none;">Win %<span class="sort-indicator"></span></th>
+                <th data-sort-col="loss_percentage" onclick="sortWinsTable('loss_percentage')" style="text-align: center; cursor: pointer; user-select: none;">Loss Ratio<span class="sort-indicator"></span></th>
+                <th data-sort-col="non_loss_percentage" onclick="sortWinsTable('non_loss_percentage')" style="text-align: center; cursor: pointer; user-select: none;">Non-Loss Ratio<span class="sort-indicator"></span></th>
             </tr>
         </thead>
         <tbody id="wins-tbody">
             {% for player in leaderboard %}
-            <tr data-name="{{ player.name|name_initial }}" data-wins="{{ player.wins }}" data-draws="{{ player.draws }}" data-losses="{{ player.losses }}" data-total_games="{{ player.total_games }}" data-win_percentage="{{ player.win_percentage }}">
+            <tr data-name="{{ player.name|name_initial }}" data-wins="{{ player.wins }}" data-draws="{{ player.draws }}" data-losses="{{ player.losses }}" data-total_games="{{ player.total_games }}" data-win_percentage="{{ player.win_percentage }}" data-loss_percentage="{{ player.loss_percentage }}" data-non_loss_percentage="{{ player.non_loss_percentage }}">
                 <td style="text-align: center;">
                     {% if loop.index == 1 %}
                     <span style="font-size: 1.5em;">🥇</span>
@@ -235,6 +237,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td style="text-align: center;">{{ player.total_games }}</td>
                 <td style="text-align: center;">
                     <strong style="color: #3498db;">{{ player.win_percentage }}%</strong>
+                </td>
+                <td style="text-align: center;">
+                    <strong style="color: #e74c3c;">{{ player.loss_percentage }}%</strong>
+                </td>
+                <td style="text-align: center;">
+                    <strong style="color: #27ae60;">{{ player.non_loss_percentage }}%</strong>
                 </td>
             </tr>
             {% endfor %}

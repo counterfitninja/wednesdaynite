@@ -618,6 +618,8 @@ def leaderboard():
         leaderboard = []
         for row in leaderboard_data:
             win_pct = round((row['wins'] / row['total_games'] * 100) if row['total_games'] > 0 else 0, 1)
+            loss_pct = round((row['losses'] / row['total_games'] * 100) if row['total_games'] > 0 else 0, 1)
+            non_loss_pct = round(((row['wins'] + row['draws']) / row['total_games'] * 100) if row['total_games'] > 0 else 0, 1)
             leaderboard.append({
                 'id': row['id'],
                 'name': row['name'],
@@ -625,7 +627,9 @@ def leaderboard():
                 'draws': row['draws'],
                 'losses': row['losses'],
                 'total_games': row['total_games'],
-                'win_percentage': win_pct
+                'win_percentage': win_pct,
+                'loss_percentage': loss_pct,
+                'non_loss_percentage': non_loss_pct
             })
         
         # Get total games with scores
