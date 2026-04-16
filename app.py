@@ -1516,6 +1516,105 @@ def service_worker():
     response.headers['Service-Worker-Allowed'] = '/'
     return response
 
+
+@app.route('/stats/rankings')
+def rankings_timeline():
+    import json
+    current_year = datetime.now().year
+
+    def name_initial(full_name):
+        if not full_name:
+            return ''
+        parts = full_name.strip().split()
+        if len(parts) == 1:
+            return parts[0]
+        return f"{parts[0]} {parts[-1][0]}."
+
+    with get_db() as conn:
+        games = conn.execute('''
+            SELECT id, date, team1_score, team2_score
+            FROM games
+            WHERE team1_score IS NOT NULL
+                AND team2_score IS NOT NULL
+                AND (is_abandoned IS NULL OR is_abandoned = 0)
+                AND strftime('%Y', date) = ?
+            ORDER BY date ASC
+        ''', (str(current_year),)).fetchall()
+
+        if not games:
+            return render_template('stats_rankings.html', chart_data=None, year=current_year)
+
+        game_ids = [g['id'] for g in games]
+        placeholders = ','.join('?' * len(game_ids))
+        assignments = conn.execute(f'''
+            SELECT ta.game_id, ta.player_id, ta.team_number, p.name
+            FROM team_assignments ta
+            JOIN players p ON ta.player_id = p.id
+            WHERE ta.game_id IN ({placeholders})
+        ''', game_ids).fetchall()
+
+    # Build per-game team lookup
+    game_teams = {}
+    player_names = {}
+    for a in assignments:
+        game_teams.setdefault(a['game_id'], {})[a['player_id']] = a['team_number']
+        player_names[a['player_id']] = a['name']
+
+    # Walk through games in order, accumulating stats and recording rank snapshots
+    cumulative = {}  # player_id -> {wins, draws, losses, total}
+    timeline = []
+
+    for game in games:
+        gid = game['id']
+        t1 = game['team1_score']
+        t2 = game['team2_score']
+        teams = game_teams.get(gid, {})
+
+        for player_id, team_number in teams.items():
+            if player_id not in cumulative:
+                cumulative[player_id] = {'wins': 0, 'draws': 0, 'losses': 0, 'total': 0}
+            stats = cumulative[player_id]
+            stats['total'] += 1
+            if t1 == t2:
+                stats['draws'] += 1
+            elif (team_number == 1 and t1 > t2) or (team_number == 2 and t2 > t1):
+                stats['wins'] += 1
+            else:
+                stats['losses'] += 1
+
+        # Rank all players who have played at least one game
+        snapshot = sorted(
+            [(pid, s) for pid, s in cumulative.items() if s['total'] > 0],
+            key=lambda x: (-x[1]['wins'], -(x[1]['wins'] + x[1]['draws']), -x[1]['total'])
+        )
+        ranks = {pid: rank + 1 for rank, (pid, _) in enumerate(snapshot)}
+        timeline.append({'date': game['date'], 'ranks': ranks})
+
+    if not timeline:
+        return render_template('stats_rankings.html', chart_data=None, year=current_year)
+
+    labels = [t['date'] for t in timeline]
+    all_player_ids = list(player_names.keys())
+
+    # Sort players by their final rank
+    final_ranks = timeline[-1]['ranks']
+    all_player_ids.sort(key=lambda pid: final_ranks.get(pid, 9999))
+
+    datasets = []
+    for pid in all_player_ids:
+        data = [t['ranks'].get(pid) for t in timeline]
+        if any(d is not None for d in data):
+            datasets.append({
+                'player_id': pid,
+                'name': name_initial(player_names[pid]),
+                'data': data,
+                'final_rank': final_ranks.get(pid, 9999)
+            })
+
+    chart_data = json.dumps({'labels': labels, 'datasets': datasets})
+    return render_template('stats_rankings.html', chart_data=chart_data, year=current_year)
+
+
 # Initialize database on module load (for Gunicorn/Azure)
 init_db()
 

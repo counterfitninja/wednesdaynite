@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block title %}Rankings Timeline - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<style>
+    .chart-wrapper {
+        position: relative;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .chart-inner {
+        min-width: 480px;
+    }
+    .player-toggle-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+    }
+    .player-toggle-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        border: 2px solid transparent;
+        cursor: pointer;
+        font-size: 0.85em;
+        font-weight: 600;
+        transition: opacity 0.2s, transform 0.1s;
+        color: white;
+        user-select: none;
+    }
+    .player-toggle-btn.hidden {
+        opacity: 0.35;
+    }
+    .player-toggle-btn:active {
+        transform: scale(0.96);
+    }
+    .color-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        background: white;
+    }
+    @media (max-width: 480px) {
+        .player-toggle-btn {
+            font-size: 0.78em;
+            padding: 5px 10px;
+        }
+    }
+</style>
+
+<div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+    <a href="/leaderboard" class="btn">← Leaderboard</a>
+    <a href="/" class="btn">🏠 Games</a>
+</div>
+
+<div class="card">
+    <h1>📈 Rankings Timeline {{ year }}</h1>
+    <p style="color: #7f8c8d; margin-top: 6px;">
+        Win-based rank after each scored game — lower is better. Tap a name to show/hide their line.
+    </p>
+</div>
+
+{% if chart_data %}
+<div class="card">
+    <div class="chart-wrapper">
+        <div class="chart-inner">
+            <canvas id="rankChart"></canvas>
+        </div>
+    </div>
+    <div class="player-toggle-grid" id="playerToggles"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" integrity="sha256-oVuCIBsTeh0HCi+TXX3Ib80FZbKNMcvwMQPTnxzDZhw=" crossorigin="anonymous"></script>
+<script>
+(function () {
+    const raw = {{ chart_data | safe }};
+    const labels = raw.labels.map(d => {
+        const [y, m, day] = d.split('-');
+        return `${day}/${m}`;
+    });
+
+    // Colour palette - enough for up to ~20 players
+    const PALETTE = [
+        '#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6',
+        '#1abc9c','#e67e22','#34495e','#e91e63','#00bcd4',
+        '#8bc34a','#ff5722','#607d8b','#673ab7','#ff9800',
+        '#795548','#009688','#f44336','#2196f3','#4caf50'
+    ];
+
+    const allDatasets = raw.datasets.map((p, i) => ({
+        label: p.name,
+        data: p.data,
+        borderColor: PALETTE[i % PALETTE.length],
+        backgroundColor: PALETTE[i % PALETTE.length],
+        borderWidth: 2.5,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        tension: 0.3,
+        spanGaps: false,
+        playerId: p.player_id,
+        colorIndex: i
+    }));
+
+    // Max rank for Y-axis scale
+    const maxRank = Math.max(...raw.datasets.flatMap(p => p.data.filter(v => v !== null)));
+
+    const ctx = document.getElementById('rankChart').getContext('2d');
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets: allDatasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+                y: {
+                    reverse: true,
+                    min: 1,
+                    max: maxRank + 0.5,
+                    ticks: {
+                        stepSize: 1,
+                        callback: v => Number.isInteger(v) ? `#${v}` : ''
+                    },
+                    title: { display: true, text: 'Rank (lower = better)' }
+                },
+                x: {
+                    title: { display: true, text: 'Game date (dd/mm)' },
+                    ticks: { maxRotation: 45 }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title: ctx => `Game: ${raw.labels[ctx[0].dataIndex]}`,
+                        label: ctx => {
+                            const v = ctx.raw;
+                            return v !== null ? ` ${ctx.dataset.label}: #${v}` : ` ${ctx.dataset.label}: —`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Build toggle buttons
+    const grid = document.getElementById('playerToggles');
+    allDatasets.forEach((ds, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'player-toggle-btn';
+        btn.style.backgroundColor = ds.borderColor;
+        btn.style.borderColor = ds.borderColor;
+        btn.dataset.index = i;
+
+        const dot = document.createElement('span');
+        dot.className = 'color-dot';
+        btn.appendChild(dot);
+        btn.appendChild(document.createTextNode(ds.label));
+
+        btn.addEventListener('click', () => {
+            const meta = chart.getDatasetMeta(i);
+            const hidden = !meta.hidden;
+            meta.hidden = hidden;
+            chart.update();
+            btn.classList.toggle('hidden', hidden);
+        });
+
+        grid.appendChild(btn);
+    });
+})();
+</script>
+{% else %}
+<div class="card" style="text-align: center; padding: 60px 20px;">
+    <p style="font-size: 1.5em; margin-bottom: 12px;">📊</p>
+    <p style="color: #7f8c8d;">No scored games with team assignments yet for {{ year }}.</p>
+    <p style="margin-top: 12px;">
+        <a href="/leaderboard" class="btn">View Leaderboard</a>
+    </p>
+</div>
+{% endif %}
+{% endblock %}
