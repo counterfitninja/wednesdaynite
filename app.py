@@ -1,12 +1,13 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 from functools import wraps
 from PIL import Image, UnidentifiedImageError
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'change-this-to-something-secure-in-production')
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 
 # Build version - timestamp when app starts
 BUILD_VERSION = datetime.now().strftime('%Y.%m.%d.%H%M')
@@ -304,6 +305,7 @@ def login():
         print(f"DEBUG - Password match: {password == ADMIN_PASSWORD}")
         
         if password == ADMIN_PASSWORD:
+            session.permanent = True
             session['logged_in'] = True
             next_url = request.args.get('next', url_for('admin'))
             return redirect(next_url)
