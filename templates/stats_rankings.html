@@ -149,7 +149,7 @@
         '#795548','#009688','#f44336','#2196f3','#4caf50'
     ];
 
-    let activeFrameIndex = labels.length - 1;
+    let playheadPosition = labels.length - 1;
 
     const allDatasets = raw.datasets.map((p, i) => ({
         label: p.name,
@@ -157,20 +157,8 @@
         borderColor: PALETTE[i % PALETTE.length],
         backgroundColor: PALETTE[i % PALETTE.length],
         borderWidth: 2.5,
-        pointRadius: (context) => {
-            const value = context.dataset.data[context.dataIndex];
-            if (value === null || context.dataIndex !== activeFrameIndex) {
-                return 0;
-            }
-            return Math.max(6, Math.round(FACE_SIZE * 0.52));
-        },
-        pointHoverRadius: (context) => {
-            const value = context.dataset.data[context.dataIndex];
-            if (value === null || context.dataIndex !== activeFrameIndex) {
-                return 0;
-            }
-            return Math.max(7, Math.round(FACE_SIZE * 0.6));
-        },
+        pointRadius: 0,
+        pointHoverRadius: 0,
         tension: 0.3,
         spanGaps: false,
         playerId: p.player_id,
@@ -202,11 +190,77 @@
     const maxRank = Math.max(...raw.datasets.flatMap(p => p.data.filter(v => v !== null)));
     const totalFrames = labels.length;
 
+    const movingHeadsPlugin = {
+        id: 'movingHeads',
+        afterDatasetsDraw(chart) {
+            const xScale = chart.scales.x;
+            const yScale = chart.scales.y;
+            if (!xScale || !yScale) {
+                return;
+            }
+
+            const frame = Math.max(0, Math.min(totalFrames - 1, playheadPosition));
+            const leftIndex = Math.floor(frame);
+            const rightIndex = Math.min(leftIndex + 1, totalFrames - 1);
+            const progress = frame - leftIndex;
+
+            const leftX = xScale.getPixelForValue(leftIndex);
+            const rightX = xScale.getPixelForValue(rightIndex);
+            const x = leftX + ((rightX - leftX) * progress);
+
+            function interpolateY(data) {
+                const leftValue = data[leftIndex];
+                const rightValue = data[rightIndex];
+
+                if (leftValue === null && rightValue === null) {
+                    return null;
+                }
+                if (leftValue === null) {
+                    return rightValue;
+                }
+                if (rightValue === null) {
+                    return leftValue;
+                }
+                return leftValue + ((rightValue - leftValue) * progress);
+            }
+
+            const ctx = chart.ctx;
+            allDatasets.forEach((ds, i) => {
+                const meta = chart.getDatasetMeta(i);
+                if (meta.hidden) {
+                    return;
+                }
+
+                const yValue = interpolateY(ds.data);
+                if (yValue === null) {
+                    return;
+                }
+
+                const y = yScale.getPixelForValue(yValue);
+                const size = Math.max(6, Math.round(FACE_SIZE * 0.52));
+                const half = size / 2;
+
+                if (ds.pointStyle && ds.pointStyle.width) {
+                    ctx.drawImage(ds.pointStyle, x - half, y - half, size, size);
+                    return;
+                }
+
+                ctx.save();
+                ctx.fillStyle = ds.borderColor;
+                ctx.beginPath();
+                ctx.arc(x, y, half, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+    };
+
     function createChart(datasetsForChart) {
         const ctx = document.getElementById('rankChart').getContext('2d');
         return new Chart(ctx, {
             type: 'line',
             data: { labels, datasets: datasetsForChart },
+            plugins: [movingHeadsPlugin],
             options: {
                 responsive: true,
                 maintainAspectRatio: true,
@@ -269,7 +323,8 @@
         const dateLabel = document.getElementById('timelineDate');
 
         let playbackIndex = totalFrames - 1;
-        let playbackTimer = null;
+        let playbackAnimationId = null;
+        let lastFrameTime = null;
         let isPlaying = false;
 
         scrubber.max = Math.max(0, totalFrames - 1);
@@ -278,7 +333,13 @@
             if (!chart.scales || !chart.scales.x || totalFrames <= 1) {
                 return;
             }
-            const xPixel = chart.scales.x.getPixelForValue(frameIndex);
+            const clamped = Math.max(0, Math.min(totalFrames - 1, frameIndex));
+            const leftIndex = Math.floor(clamped);
+            const rightIndex = Math.min(leftIndex + 1, totalFrames - 1);
+            const progress = clamped - leftIndex;
+            const leftX = chart.scales.x.getPixelForValue(leftIndex);
+            const rightX = chart.scales.x.getPixelForValue(rightIndex);
+            const xPixel = leftX + ((rightX - leftX) * progress);
             const maxScroll = Math.max(wrapper.scrollWidth - wrapper.clientWidth, 0);
             const target = Math.max(0, Math.min(maxScroll, xPixel - (wrapper.clientWidth / 2)));
             wrapper.scrollTo({ left: target, behavior: 'smooth' });
@@ -287,11 +348,13 @@
         function setFrame(frameIndex, scroll = true) {
             const clamped = Math.max(0, Math.min(totalFrames - 1, frameIndex));
             playbackIndex = clamped;
-            activeFrameIndex = clamped;
+            playheadPosition = clamped;
+
+            const uiIndex = Math.round(clamped);
 
             chart.update('none');
-            scrubber.value = String(clamped);
-            dateLabel.textContent = `Date: ${raw.labels[clamped]}`;
+            scrubber.value = String(uiIndex);
+            dateLabel.textContent = `Date: ${raw.labels[uiIndex]}`;
 
             if (scroll) {
                 scrollToFrame(clamped);
@@ -299,10 +362,11 @@
         }
 
         function stopPlayback() {
-            if (playbackTimer) {
-                clearInterval(playbackTimer);
-                playbackTimer = null;
+            if (playbackAnimationId) {
+                cancelAnimationFrame(playbackAnimationId);
+                playbackAnimationId = null;
             }
+            lastFrameTime = null;
             isPlaying = false;
             playBtn.textContent = 'Play';
         }
@@ -319,13 +383,30 @@
             isPlaying = true;
             playBtn.textContent = 'Pause';
 
-            playbackTimer = setInterval(() => {
-                if (playbackIndex >= totalFrames - 1) {
+            const tick = (timestamp) => {
+                if (!isPlaying) {
+                    return;
+                }
+                if (lastFrameTime === null) {
+                    lastFrameTime = timestamp;
+                }
+
+                const deltaMs = Math.max(0, timestamp - lastFrameTime);
+                lastFrameTime = timestamp;
+                const stepProgress = deltaMs / intervalMs;
+
+                const nextFrame = playbackIndex + stepProgress;
+                if (nextFrame >= totalFrames - 1) {
+                    setFrame(totalFrames - 1);
                     stopPlayback();
                     return;
                 }
-                setFrame(playbackIndex + 1);
-            }, intervalMs);
+
+                setFrame(nextFrame);
+                playbackAnimationId = requestAnimationFrame(tick);
+            };
+
+            playbackAnimationId = requestAnimationFrame(tick);
         }
 
         // Build toggle buttons
