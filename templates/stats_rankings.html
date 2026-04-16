@@ -18,6 +18,33 @@
         gap: 8px;
         margin-top: 12px;
     }
+    .timeline-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+    .timeline-controls .btn {
+        padding: 7px 12px;
+    }
+    .timeline-controls select,
+    .timeline-controls input[type="range"] {
+        accent-color: #2c3e50;
+    }
+    .timeline-date {
+        color: #2c3e50;
+        font-weight: 600;
+    }
+    .timeline-range-wrap {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 220px;
+    }
+    .timeline-range-wrap input[type="range"] {
+        width: 170px;
+    }
     .player-toggle-btn {
         display: inline-flex;
         align-items: center;
@@ -80,6 +107,22 @@
 
 {% if chart_data %}
 <div class="card">
+    <div class="timeline-controls">
+        <button id="playTimelineBtn" class="btn" type="button">Play</button>
+        <button id="resetTimelineBtn" class="btn" type="button">Reset</button>
+        <label for="timelineSpeed" style="font-weight: 600; color: #2c3e50;">Speed</label>
+        <select id="timelineSpeed" aria-label="Playback speed">
+            <option value="1200">Slow</option>
+            <option value="800" selected>Normal</option>
+            <option value="450">Fast</option>
+            <option value="250">Very fast</option>
+        </select>
+        <div class="timeline-range-wrap">
+            <label for="timelineScrubber" style="font-weight: 600; color: #2c3e50;">Timeline</label>
+            <input id="timelineScrubber" type="range" min="0" max="0" value="0" step="1" aria-label="Timeline position">
+        </div>
+        <span id="timelineDate" class="timeline-date"></span>
+    </div>
     <div class="chart-wrapper">
         <div class="chart-inner">
             <canvas id="rankChart"></canvas>
@@ -108,7 +151,8 @@
 
     const allDatasets = raw.datasets.map((p, i) => ({
         label: p.name,
-        data: p.data,
+        data: p.data.slice(),
+        sourceData: p.data.slice(),
         borderColor: PALETTE[i % PALETTE.length],
         backgroundColor: PALETTE[i % PALETTE.length],
         borderWidth: 2.5,
@@ -143,6 +187,7 @@
 
     // Max rank for Y-axis scale
     const maxRank = Math.max(...raw.datasets.flatMap(p => p.data.filter(v => v !== null)));
+    const totalFrames = labels.length;
 
     function createChart(datasetsForChart) {
         const ctx = document.getElementById('rankChart').getContext('2d');
@@ -202,12 +247,84 @@
 
     Promise.all(faceLoads).then(() => {
         const chart = createChart(allDatasets);
+        const wrapper = document.querySelector('.chart-wrapper');
+        const canvas = document.getElementById('rankChart');
+
+        const playBtn = document.getElementById('playTimelineBtn');
+        const resetBtn = document.getElementById('resetTimelineBtn');
+        const speedSelect = document.getElementById('timelineSpeed');
+        const scrubber = document.getElementById('timelineScrubber');
+        const dateLabel = document.getElementById('timelineDate');
+
+        let playbackIndex = totalFrames - 1;
+        let playbackTimer = null;
+        let isPlaying = false;
+
+        scrubber.max = Math.max(0, totalFrames - 1);
+
+        function scrollToFrame(frameIndex) {
+            if (!chart.scales || !chart.scales.x || totalFrames <= 1) {
+                return;
+            }
+            const xPixel = chart.scales.x.getPixelForValue(frameIndex);
+            const maxScroll = Math.max(wrapper.scrollWidth - wrapper.clientWidth, 0);
+            const target = Math.max(0, Math.min(maxScroll, xPixel - (wrapper.clientWidth / 2)));
+            wrapper.scrollTo({ left: target, behavior: 'smooth' });
+        }
+
+        function setFrame(frameIndex, scroll = true) {
+            const clamped = Math.max(0, Math.min(totalFrames - 1, frameIndex));
+            playbackIndex = clamped;
+
+            allDatasets.forEach(ds => {
+                ds.data = ds.sourceData.map((value, idx) => (idx <= clamped ? value : null));
+            });
+
+            chart.update('none');
+            scrubber.value = String(clamped);
+            dateLabel.textContent = `Date: ${raw.labels[clamped]}`;
+
+            if (scroll) {
+                scrollToFrame(clamped);
+            }
+        }
+
+        function stopPlayback() {
+            if (playbackTimer) {
+                clearInterval(playbackTimer);
+                playbackTimer = null;
+            }
+            isPlaying = false;
+            playBtn.textContent = 'Play';
+        }
+
+        function startPlayback() {
+            if (totalFrames <= 1) {
+                return;
+            }
+            if (playbackIndex >= totalFrames - 1) {
+                setFrame(0);
+            }
+            const intervalMs = Number(speedSelect.value) || 800;
+            stopPlayback();
+            isPlaying = true;
+            playBtn.textContent = 'Pause';
+
+            playbackTimer = setInterval(() => {
+                if (playbackIndex >= totalFrames - 1) {
+                    stopPlayback();
+                    return;
+                }
+                setFrame(playbackIndex + 1);
+            }, intervalMs);
+        }
 
         // Build toggle buttons
         const grid = document.getElementById('playerToggles');
         allDatasets.forEach((ds, i) => {
             const btn = document.createElement('button');
             btn.className = 'player-toggle-btn';
+            btn.type = 'button';
             btn.style.backgroundColor = ds.borderColor;
             btn.style.borderColor = ds.borderColor;
             btn.dataset.index = i;
@@ -227,6 +344,32 @@
 
             grid.appendChild(btn);
         });
+
+        playBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                stopPlayback();
+            } else {
+                startPlayback();
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            stopPlayback();
+            setFrame(0);
+        });
+
+        speedSelect.addEventListener('change', () => {
+            if (isPlaying) {
+                startPlayback();
+            }
+        });
+
+        scrubber.addEventListener('input', () => {
+            stopPlayback();
+            setFrame(Number(scrubber.value), false);
+        });
+
+        setFrame(totalFrames - 1, false);
     });
 })();
 </script>
