@@ -63,6 +63,19 @@
     <p style="color: #7f8c8d; margin-top: 6px;">
         Win-based rank after each scored game — lower is better. Tap a name to show/hide their line.
     </p>
+    <form method="get" action="{{ url_for('rankings_timeline') }}" style="margin-top: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <label for="player_limit" style="font-weight: 600; color: #2c3e50;">Players shown:</label>
+        <select id="player_limit" name="player_limit" onchange="this.form.submit()" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #d0d7de;">
+            <option value="all" {% if selected_player_limit is none %}selected{% endif %}>All</option>
+            {% for limit in player_limit_options %}
+            <option value="{{ limit }}" {% if selected_player_limit == limit %}selected{% endif %}>Top {{ limit }}</option>
+            {% endfor %}
+        </select>
+        <noscript><button type="submit" class="btn">Apply</button></noscript>
+        {% if chart_data %}
+        <span style="color: #7f8c8d; font-size: 0.95em;">Showing {{ shown_players }} of {{ total_players }} players</span>
+        {% endif %}
+    </form>
 </div>
 
 {% if chart_data %}

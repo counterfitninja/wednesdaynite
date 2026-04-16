@@ -1626,6 +1626,17 @@ def service_worker():
 def rankings_timeline():
     import json
     current_year = datetime.now().year
+    player_limit_raw = request.args.get('player_limit', '').strip().lower()
+    player_limit_options = [5, 10, 15, 20]
+    selected_player_limit = None
+
+    if player_limit_raw and player_limit_raw != 'all':
+        try:
+            parsed_limit = int(player_limit_raw)
+            if parsed_limit > 0:
+                selected_player_limit = parsed_limit
+        except ValueError:
+            selected_player_limit = None
 
     def name_initial(full_name):
         if not full_name:
@@ -1656,7 +1667,16 @@ def rankings_timeline():
         ''', (str(current_year),)).fetchall()
 
         if not games:
-            return render_template('stats_rankings.html', chart_data=None, year=current_year, face_point_size=face_point_size)
+            return render_template(
+                'stats_rankings.html',
+                chart_data=None,
+                year=current_year,
+                face_point_size=face_point_size,
+                selected_player_limit=selected_player_limit,
+                player_limit_options=player_limit_options,
+                total_players=0,
+                shown_players=0
+            )
 
         game_ids = [g['id'] for g in games]
         placeholders = ','.join('?' * len(game_ids))
@@ -1705,7 +1725,16 @@ def rankings_timeline():
         timeline.append({'date': game['date'], 'ranks': ranks})
 
     if not timeline:
-        return render_template('stats_rankings.html', chart_data=None, year=current_year, face_point_size=face_point_size)
+        return render_template(
+            'stats_rankings.html',
+            chart_data=None,
+            year=current_year,
+            face_point_size=face_point_size,
+            selected_player_limit=selected_player_limit,
+            player_limit_options=player_limit_options,
+            total_players=0,
+            shown_players=0
+        )
 
     labels = [t['date'] for t in timeline]
     all_player_ids = list(player_names.keys())
@@ -1726,8 +1755,23 @@ def rankings_timeline():
                 'face_url': get_player_face_url(pid)
             })
 
+    total_players = len(datasets)
+    if selected_player_limit:
+        datasets = datasets[:selected_player_limit]
+
+    shown_players = len(datasets)
+
     chart_data = json.dumps({'labels': labels, 'datasets': datasets})
-    return render_template('stats_rankings.html', chart_data=chart_data, year=current_year, face_point_size=face_point_size)
+    return render_template(
+        'stats_rankings.html',
+        chart_data=chart_data,
+        year=current_year,
+        face_point_size=face_point_size,
+        selected_player_limit=selected_player_limit,
+        player_limit_options=player_limit_options,
+        total_players=total_players,
+        shown_players=shown_players
+    )
 
 
 # Initialize database on module load (for Gunicorn/Azure)
