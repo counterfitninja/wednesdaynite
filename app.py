@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime
 import os
 from functools import wraps
-from werkzeug.utils import secure_filename
+from PIL import Image, UnidentifiedImageError
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'change-this-to-something-secure-in-production')
@@ -115,6 +115,8 @@ def get_db():
 
 
 ALLOWED_FACE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
+FACE_IMAGE_MAX_DIMENSION = 256
+FACE_IMAGE_WEBP_QUALITY = 82
 
 
 def _face_storage_dir():
@@ -144,16 +146,30 @@ def save_player_face(player_id, upload_file):
         return False, 'Invalid file type. Use png, jpg, jpeg, webp, or gif.'
 
     os.makedirs(_face_storage_dir(), exist_ok=True)
-    extension = secure_filename(upload_file.filename).rsplit('.', 1)[1].lower()
 
     for ext in ALLOWED_FACE_EXTENSIONS:
         old_path = os.path.join(_face_storage_dir(), f'{player_id}.{ext}')
         if os.path.exists(old_path):
             os.remove(old_path)
 
-    save_path = os.path.join(_face_storage_dir(), f'{player_id}.{extension}')
-    upload_file.save(save_path)
-    return True, 'Face image uploaded.'
+    save_path = os.path.join(_face_storage_dir(), f'{player_id}.webp')
+
+    try:
+        upload_file.stream.seek(0)
+        with Image.open(upload_file.stream) as img:
+            if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                processed = img.convert('RGBA')
+            else:
+                processed = img.convert('RGB')
+
+            processed.thumbnail((FACE_IMAGE_MAX_DIMENSION, FACE_IMAGE_MAX_DIMENSION), Image.Resampling.LANCZOS)
+            processed.save(save_path, format='WEBP', quality=FACE_IMAGE_WEBP_QUALITY, method=6)
+    except UnidentifiedImageError:
+        return False, 'Invalid image file. Please upload a valid image.'
+    except Exception:
+        return False, 'Could not process image. Please try a different file.'
+
+    return True, 'Face image uploaded and optimized.'
 
 def init_db():
     with get_db() as conn:
