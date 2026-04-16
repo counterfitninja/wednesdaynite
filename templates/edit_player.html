@@ -10,6 +10,22 @@
 </div>
 
 <div class="card">
+    <h2 style="margin-bottom: 12px;">Player Face</h2>
+    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+        {% if face_url %}
+        <img src="{{ face_url }}" alt="{{ player.name }}" style="width: 76px; height: 76px; border-radius: 50%; object-fit: cover; border: 3px solid #2c3e50;">
+        {% else %}
+        <div style="width: 76px; height: 76px; border-radius: 50%; border: 3px dashed #bdc3c7; display: inline-flex; align-items: center; justify-content: center; color: #95a5a6; font-size: 0.85em;">No face</div>
+        {% endif %}
+
+        <form action="/players/{{ player.id }}/face" method="POST" enctype="multipart/form-data" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <input type="file" name="face_image" accept="image/png,image/jpeg,image/webp,image/gif" required>
+            <button type="submit" class="btn">Upload Face</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
     <form method="POST">
         <div class="form-group">
             <label for="name">Name *</label>

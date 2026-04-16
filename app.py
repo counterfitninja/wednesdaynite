@@ -508,12 +508,10 @@ def admin_players():
             ORDER BY p.name
         ''', (total_games_count, total_games_count, total_games_count)).fetchall()
 
-    player_faces = {player['id']: get_player_face_url(player['id']) for player in players}
     return render_template(
         'admin_players.html',
         players=players,
-        weekly_payment_amount=weekly_payment_amount,
-        player_faces=player_faces
+        weekly_payment_amount=weekly_payment_amount
     )
 
 
@@ -854,7 +852,12 @@ def edit_player(player_id):
             # Validate skill rating is between 1-5
             if skill_rating < 1 or skill_rating > 5:
                 player = conn.execute('SELECT * FROM players WHERE id = ?', (player_id,)).fetchone()
-                return render_template('edit_player.html', player=player, error='Skill rating must be between 1 and 5')
+                return render_template(
+                    'edit_player.html',
+                    player=player,
+                    face_url=get_player_face_url(player_id),
+                    error='Skill rating must be between 1 and 5'
+                )
             
             conn.execute('UPDATE players SET name = ?, alias = ?, phone = ?, email = ?, skill_rating = ?, payment_exempt = ? WHERE id = ?',
                        (name, alias, phone, email, skill_rating, payment_exempt, player_id))
@@ -865,7 +868,7 @@ def edit_player(player_id):
         if not player:
             return "Player not found", 404
         
-        return render_template('edit_player.html', player=player)
+        return render_template('edit_player.html', player=player, face_url=get_player_face_url(player_id))
     return render_template('add_player.html')
 
 @app.route('/players/<int:player_id>/payments', methods=['GET', 'POST'])
