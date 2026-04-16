@@ -149,15 +149,28 @@
         '#795548','#009688','#f44336','#2196f3','#4caf50'
     ];
 
+    let activeFrameIndex = labels.length - 1;
+
     const allDatasets = raw.datasets.map((p, i) => ({
         label: p.name,
         data: p.data.slice(),
-        sourceData: p.data.slice(),
         borderColor: PALETTE[i % PALETTE.length],
         backgroundColor: PALETTE[i % PALETTE.length],
         borderWidth: 2.5,
-        pointRadius: Math.max(4, Math.round(FACE_SIZE * 0.35)),
-        pointHoverRadius: Math.max(5, Math.round(FACE_SIZE * 0.45)),
+        pointRadius: (context) => {
+            const value = context.dataset.data[context.dataIndex];
+            if (value === null || context.dataIndex !== activeFrameIndex) {
+                return 0;
+            }
+            return Math.max(6, Math.round(FACE_SIZE * 0.52));
+        },
+        pointHoverRadius: (context) => {
+            const value = context.dataset.data[context.dataIndex];
+            if (value === null || context.dataIndex !== activeFrameIndex) {
+                return 0;
+            }
+            return Math.max(7, Math.round(FACE_SIZE * 0.6));
+        },
         tension: 0.3,
         spanGaps: false,
         playerId: p.player_id,
@@ -248,7 +261,6 @@
     Promise.all(faceLoads).then(() => {
         const chart = createChart(allDatasets);
         const wrapper = document.querySelector('.chart-wrapper');
-        const canvas = document.getElementById('rankChart');
 
         const playBtn = document.getElementById('playTimelineBtn');
         const resetBtn = document.getElementById('resetTimelineBtn');
@@ -275,10 +287,7 @@
         function setFrame(frameIndex, scroll = true) {
             const clamped = Math.max(0, Math.min(totalFrames - 1, frameIndex));
             playbackIndex = clamped;
-
-            allDatasets.forEach(ds => {
-                ds.data = ds.sourceData.map((value, idx) => (idx <= clamped ? value : null));
-            });
+            activeFrameIndex = clamped;
 
             chart.update('none');
             scrubber.value = String(clamped);
