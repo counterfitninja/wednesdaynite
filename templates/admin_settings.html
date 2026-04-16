@@ -32,6 +32,21 @@
         </div>
 
         <div style="margin-bottom: 20px;">
+            <label for="rankings_face_size" style="display: block; font-weight: 600; margin-bottom: 8px;">Rankings graph face size (px)</label>
+            <input
+                id="rankings_face_size"
+                name="rankings_face_size"
+                type="number"
+                min="8"
+                max="36"
+                step="1"
+                value="{{ rankings_face_size }}"
+                style="max-width: 220px;"
+            >
+            <p style="color: #7f8c8d; font-size: 14px; margin-top: 8px; margin-bottom: 0;">Controls the face icon size on the rankings timeline chart.</p>
+        </div>
+
+        <div style="margin-bottom: 20px;">
             <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 2px solid #e0e0e0;">
                 <input type="checkbox" name="notifications_enabled" {% if notifications_enabled %}checked{% endif %} 
                        style="width: 24px; height: 24px; cursor: pointer;">

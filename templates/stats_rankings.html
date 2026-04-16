@@ -78,6 +78,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
 (function () {
+    const FACE_SIZE = {{ face_point_size|default(16) }};
     const raw = {{ chart_data | safe }};
     const labels = raw.labels.map(d => {
         const [y, m, day] = d.split('-');
@@ -98,8 +99,8 @@
         borderColor: PALETTE[i % PALETTE.length],
         backgroundColor: PALETTE[i % PALETTE.length],
         borderWidth: 2.5,
-        pointRadius: 5,
-        pointHoverRadius: 6,
+        pointRadius: Math.max(4, Math.round(FACE_SIZE * 0.35)),
+        pointHoverRadius: Math.max(5, Math.round(FACE_SIZE * 0.45)),
         tension: 0.3,
         spanGaps: false,
         playerId: p.player_id,
@@ -178,7 +179,7 @@
         return new Promise(resolve => {
             const img = new Image();
             img.onload = () => {
-                ds.pointStyle = createFacePointStyle(img, 16);
+                ds.pointStyle = createFacePointStyle(img, FACE_SIZE);
                 resolve(ds);
             };
             img.onerror = () => resolve(ds);

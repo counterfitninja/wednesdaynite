@@ -548,7 +548,7 @@ def admin_player_faces():
 def upload_player_face(player_id):
     file = request.files.get('face_image')
     ok, _ = save_player_face(player_id, file)
-    return redirect(url_for('admin_players'))
+    return redirect(url_for('edit_player', player_id=player_id))
 
 @app.route('/admin/settings', methods=['GET', 'POST'])
 @login_required
@@ -557,12 +557,19 @@ def admin_settings():
         if request.method == 'POST':
             notifications_enabled = request.form.get('notifications_enabled') == 'on'
             weekly_payment_amount_raw = request.form.get('weekly_payment_amount', '').strip()
+            rankings_face_size_raw = request.form.get('rankings_face_size', '').strip()
 
             try:
                 weekly_payment_amount = float(weekly_payment_amount_raw) if weekly_payment_amount_raw else 0.0
             except ValueError:
                 weekly_payment_amount = 0.0
             weekly_payment_amount = max(0.0, weekly_payment_amount)
+
+            try:
+                rankings_face_size = int(rankings_face_size_raw) if rankings_face_size_raw else 16
+            except ValueError:
+                rankings_face_size = 16
+            rankings_face_size = max(8, min(36, rankings_face_size))
             
             # Update or insert setting
             conn.execute('''
@@ -573,6 +580,10 @@ def admin_settings():
                 INSERT OR REPLACE INTO settings (key, value)
                 VALUES ('weekly_payment_amount', ?)
             ''', (str(weekly_payment_amount),))
+            conn.execute('''
+                INSERT OR REPLACE INTO settings (key, value)
+                VALUES ('rankings_face_size', ?)
+            ''', (str(rankings_face_size),))
             conn.commit()
             
             return redirect(url_for('admin_settings'))
@@ -584,17 +595,26 @@ def admin_settings():
         payment_setting = conn.execute(
             "SELECT value FROM settings WHERE key = 'weekly_payment_amount'"
         ).fetchone()
+        face_size_setting = conn.execute(
+            "SELECT value FROM settings WHERE key = 'rankings_face_size'"
+        ).fetchone()
         
         notifications_enabled = setting['value'] == 'true' if setting else False
         try:
             weekly_payment_amount = float(payment_setting['value']) if payment_setting and payment_setting['value'] is not None else 0.0
         except (TypeError, ValueError):
             weekly_payment_amount = 0.0
+        try:
+            rankings_face_size = int(face_size_setting['value']) if face_size_setting and face_size_setting['value'] is not None else 16
+        except (TypeError, ValueError):
+            rankings_face_size = 16
+        rankings_face_size = max(8, min(36, rankings_face_size))
     
     return render_template(
         'admin_settings.html',
         notifications_enabled=notifications_enabled,
-        weekly_payment_amount=weekly_payment_amount
+        weekly_payment_amount=weekly_payment_amount,
+        rankings_face_size=rankings_face_size
     )
 
 @app.route('/api/settings/notifications')
@@ -1616,6 +1636,15 @@ def rankings_timeline():
         return f"{parts[0]} {parts[-1][0]}."
 
     with get_db() as conn:
+        face_size_setting = conn.execute(
+            "SELECT value FROM settings WHERE key = 'rankings_face_size'"
+        ).fetchone()
+        try:
+            face_point_size = int(face_size_setting['value']) if face_size_setting and face_size_setting['value'] is not None else 16
+        except (TypeError, ValueError):
+            face_point_size = 16
+        face_point_size = max(8, min(36, face_point_size))
+
         games = conn.execute('''
             SELECT id, date, team1_score, team2_score
             FROM games
@@ -1627,7 +1656,7 @@ def rankings_timeline():
         ''', (str(current_year),)).fetchall()
 
         if not games:
-            return render_template('stats_rankings.html', chart_data=None, year=current_year)
+            return render_template('stats_rankings.html', chart_data=None, year=current_year, face_point_size=face_point_size)
 
         game_ids = [g['id'] for g in games]
         placeholders = ','.join('?' * len(game_ids))
@@ -1676,7 +1705,7 @@ def rankings_timeline():
         timeline.append({'date': game['date'], 'ranks': ranks})
 
     if not timeline:
-        return render_template('stats_rankings.html', chart_data=None, year=current_year)
+        return render_template('stats_rankings.html', chart_data=None, year=current_year, face_point_size=face_point_size)
 
     labels = [t['date'] for t in timeline]
     all_player_ids = list(player_names.keys())
@@ -1698,7 +1727,7 @@ def rankings_timeline():
             })
 
     chart_data = json.dumps({'labels': labels, 'datasets': datasets})
-    return render_template('stats_rankings.html', chart_data=chart_data, year=current_year)
+    return render_template('stats_rankings.html', chart_data=chart_data, year=current_year, face_point_size=face_point_size)
 
 
 # Initialize database on module load (for Gunicorn/Azure)
