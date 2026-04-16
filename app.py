@@ -135,6 +135,26 @@ def get_player_face_url(player_id):
             return f'/static/player_faces/{player_id}.{ext}'
     return None
 
+
+def save_player_face(player_id, upload_file):
+    if not upload_file or upload_file.filename == '':
+        return False, 'Please choose an image file.'
+
+    if not allowed_face_file(upload_file.filename):
+        return False, 'Invalid file type. Use png, jpg, jpeg, webp, or gif.'
+
+    os.makedirs(_face_storage_dir(), exist_ok=True)
+    extension = secure_filename(upload_file.filename).rsplit('.', 1)[1].lower()
+
+    for ext in ALLOWED_FACE_EXTENSIONS:
+        old_path = os.path.join(_face_storage_dir(), f'{player_id}.{ext}')
+        if os.path.exists(old_path):
+            os.remove(old_path)
+
+    save_path = os.path.join(_face_storage_dir(), f'{player_id}.{extension}')
+    upload_file.save(save_path)
+    return True, 'Face image uploaded.'
+
 def init_db():
     with get_db() as conn:
         conn.execute('''
@@ -487,38 +507,30 @@ def admin_players():
             GROUP BY p.id, p.name, p.alias, p.phone, p.email, p.skill_rating, p.payment_exempt
             ORDER BY p.name
         ''', (total_games_count, total_games_count, total_games_count)).fetchall()
+
+    player_faces = {player['id']: get_player_face_url(player['id']) for player in players}
     return render_template(
         'admin_players.html',
         players=players,
-        weekly_payment_amount=weekly_payment_amount
+        weekly_payment_amount=weekly_payment_amount,
+        player_faces=player_faces
     )
 
 
 @app.route('/admin/player-faces', methods=['GET', 'POST'])
 @login_required
 def admin_player_faces():
-    os.makedirs(_face_storage_dir(), exist_ok=True)
-
     if request.method == 'POST':
         player_id = request.form.get('player_id', type=int)
         file = request.files.get('face_image')
 
-        if not player_id or not file or file.filename == '':
+        if not player_id:
             return redirect(url_for('admin_player_faces', error='Please choose a player and an image file.'))
 
-        if not allowed_face_file(file.filename):
-            return redirect(url_for('admin_player_faces', error='Invalid file type. Use png, jpg, jpeg, webp, or gif.'))
-
-        extension = secure_filename(file.filename).rsplit('.', 1)[1].lower()
-        for ext in ALLOWED_FACE_EXTENSIONS:
-            old_path = os.path.join(_face_storage_dir(), f'{player_id}.{ext}')
-            if os.path.exists(old_path):
-                os.remove(old_path)
-
-        save_path = os.path.join(_face_storage_dir(), f'{player_id}.{extension}')
-        file.save(save_path)
-
-        return redirect(url_for('admin_player_faces', success='Face image uploaded.'))
+        ok, message = save_player_face(player_id, file)
+        if ok:
+            return redirect(url_for('admin_player_faces', success=message))
+        return redirect(url_for('admin_player_faces', error=message))
 
     with get_db() as conn:
         players = conn.execute('SELECT id, name FROM players ORDER BY name').fetchall()
@@ -531,6 +543,14 @@ def admin_player_faces():
         error=request.args.get('error'),
         success=request.args.get('success')
     )
+
+
+@app.route('/players/<int:player_id>/face', methods=['POST'])
+@login_required
+def upload_player_face(player_id):
+    file = request.files.get('face_image')
+    ok, _ = save_player_face(player_id, file)
+    return redirect(url_for('admin_players'))
 
 @app.route('/admin/settings', methods=['GET', 'POST'])
 @login_required

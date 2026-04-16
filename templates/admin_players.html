@@ -96,6 +96,7 @@ function confirmMerge() {
                 <th class="col-paid-total">Paid Total</th>
                 <th class="col-total-games">Total</th>
                 <th>Attend%</th>
+                <th>Face</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -141,6 +142,19 @@ function confirmMerge() {
                     {% else %}
                         <span class="badge badge-danger">{{ "%.1f"|format(player.attendance_rate) }}%</span>
                     {% endif %}
+                </td>
+                <td style="min-width: 160px;">
+                    <form action="/players/{{ player.id }}/face" method="POST" enctype="multipart/form-data" style="display: flex; flex-direction: column; gap: 6px;">
+                        {% if player_faces[player.id] %}
+                        <img src="{{ player_faces[player.id] }}"
+                             alt="{{ player.name }}"
+                             style="width: 34px; height: 34px; border-radius: 50%; object-fit: cover; border: 2px solid #bdc3c7;">
+                        {% else %}
+                        <span style="width: 34px; height: 34px; border-radius: 50%; border: 2px dashed #bdc3c7; display: inline-flex; align-items: center; justify-content: center; font-size: 0.7em; color: #95a5a6;">No</span>
+                        {% endif %}
+                        <input type="file" name="face_image" accept="image/png,image/jpeg,image/webp,image/gif" required style="font-size: 0.75em; max-width: 150px;">
+                        <button type="submit" class="btn" style="padding: 5px 8px; font-size: 0.75em; min-height: 30px;">Upload</button>
+                    </form>
                 </td>
                 <td class="actions-cell">
                     <a href="/players/{{ player.id }}/payments" class="btn" style="padding: 5px 10px; font-size: 0.9em; margin-right: 5px; background-color: #2c3e50;">Payments</a>
