@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Player Faces{% endblock %}
+
+{% block content %}
+<div class="action-bar">
+    <h1>Admin - Player Faces</h1>
+    <div class="action-bar-btns">
+        <a href="/admin/players" class="btn">← Players</a>
+        <a href="/leaderboard" class="btn">🏆 Leaderboard</a>
+    </div>
+</div>
+
+{% if success %}
+<div class="alert alert-success">{{ success }}</div>
+{% endif %}
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<div class="card">
+    <h2>Upload / Replace Face</h2>
+    <form method="POST" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="player_id">Player</label>
+            <select id="player_id" name="player_id" required>
+                <option value="">Select a player</option>
+                {% for player in players %}
+                <option value="{{ player.id }}">{{ player.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="face_image">Image (png, jpg, jpeg, webp, gif)</label>
+            <input id="face_image" name="face_image" type="file" accept="image/png,image/jpeg,image/webp,image/gif" required>
+        </div>
+
+        <button class="btn btn-success" type="submit">Upload Face</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Current Faces</h2>
+    <div class="grid" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));">
+        {% for player in players %}
+        <div style="background: #f8f9fa; border-radius: 8px; padding: 12px; text-align: center;">
+            {% if player_faces[player.id] %}
+            <img src="{{ player_faces[player.id] }}" alt="{{ player.name }}" style="width: 84px; height: 84px; border-radius: 50%; object-fit: cover; border: 3px solid #2c3e50;">
+            {% else %}
+            <div style="width: 84px; height: 84px; border-radius: 50%; border: 3px dashed #bdc3c7; margin: 0 auto; display: flex; align-items: center; justify-content: center; color: #95a5a6; font-size: 0.85em;">No face</div>
+            {% endif %}
+            <div style="margin-top: 10px; font-weight: 600;">{{ player.name }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

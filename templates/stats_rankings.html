@@ -98,79 +98,101 @@
         borderColor: PALETTE[i % PALETTE.length],
         backgroundColor: PALETTE[i % PALETTE.length],
         borderWidth: 2.5,
-        pointRadius: 5,
-        pointHoverRadius: 7,
+        pointRadius: 8,
+        pointHoverRadius: 10,
         tension: 0.3,
         spanGaps: false,
         playerId: p.player_id,
-        colorIndex: i
+        colorIndex: i,
+        faceUrl: p.face_url || null
     }));
 
     // Max rank for Y-axis scale
     const maxRank = Math.max(...raw.datasets.flatMap(p => p.data.filter(v => v !== null)));
 
-    const ctx = document.getElementById('rankChart').getContext('2d');
-    const chart = new Chart(ctx, {
-        type: 'line',
-        data: { labels, datasets: allDatasets },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            interaction: { mode: 'index', intersect: false },
-            scales: {
-                y: {
-                    reverse: true,
-                    min: 1,
-                    max: maxRank + 0.5,
-                    ticks: {
-                        stepSize: 1,
-                        callback: v => Number.isInteger(v) ? `#${v}` : ''
+    function createChart(datasetsForChart) {
+        const ctx = document.getElementById('rankChart').getContext('2d');
+        return new Chart(ctx, {
+            type: 'line',
+            data: { labels, datasets: datasetsForChart },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    y: {
+                        reverse: true,
+                        min: 1,
+                        max: maxRank + 0.5,
+                        ticks: {
+                            stepSize: 1,
+                            callback: v => Number.isInteger(v) ? `#${v}` : ''
+                        },
+                        title: { display: true, text: 'Rank (lower = better)' }
                     },
-                    title: { display: true, text: 'Rank (lower = better)' }
+                    x: {
+                        title: { display: true, text: 'Game date (dd/mm)' },
+                        ticks: { maxRotation: 45 }
+                    }
                 },
-                x: {
-                    title: { display: true, text: 'Game date (dd/mm)' },
-                    ticks: { maxRotation: 45 }
-                }
-            },
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        title: ctx => `Game: ${raw.labels[ctx[0].dataIndex]}`,
-                        label: ctx => {
-                            const v = ctx.raw;
-                            return v !== null ? ` ${ctx.dataset.label}: #${v}` : ` ${ctx.dataset.label}: —`;
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            title: ctx => `Game: ${raw.labels[ctx[0].dataIndex]}`,
+                            label: ctx => {
+                                const v = ctx.raw;
+                                return v !== null ? ` ${ctx.dataset.label}: #${v}` : ` ${ctx.dataset.label}: —`;
+                            }
                         }
                     }
                 }
             }
+        });
+    }
+
+    const faceLoads = allDatasets.map(ds => {
+        if (!ds.faceUrl) {
+            return Promise.resolve(ds);
         }
+        return new Promise(resolve => {
+            const img = new Image();
+            img.onload = () => {
+                ds.pointStyle = img;
+                resolve(ds);
+            };
+            img.onerror = () => resolve(ds);
+            img.src = ds.faceUrl;
+        });
     });
 
-    // Build toggle buttons
-    const grid = document.getElementById('playerToggles');
-    allDatasets.forEach((ds, i) => {
-        const btn = document.createElement('button');
-        btn.className = 'player-toggle-btn';
-        btn.style.backgroundColor = ds.borderColor;
-        btn.style.borderColor = ds.borderColor;
-        btn.dataset.index = i;
+    Promise.all(faceLoads).then(() => {
+        const chart = createChart(allDatasets);
 
-        const dot = document.createElement('span');
-        dot.className = 'color-dot';
-        btn.appendChild(dot);
-        btn.appendChild(document.createTextNode(ds.label));
+        // Build toggle buttons
+        const grid = document.getElementById('playerToggles');
+        allDatasets.forEach((ds, i) => {
+            const btn = document.createElement('button');
+            btn.className = 'player-toggle-btn';
+            btn.style.backgroundColor = ds.borderColor;
+            btn.style.borderColor = ds.borderColor;
+            btn.dataset.index = i;
 
-        btn.addEventListener('click', () => {
-            const meta = chart.getDatasetMeta(i);
-            const hidden = !meta.hidden;
-            meta.hidden = hidden;
-            chart.update();
-            btn.classList.toggle('hidden', hidden);
+            const dot = document.createElement('span');
+            dot.className = 'color-dot';
+            btn.appendChild(dot);
+            btn.appendChild(document.createTextNode(ds.label));
+
+            btn.addEventListener('click', () => {
+                const meta = chart.getDatasetMeta(i);
+                const hidden = !meta.hidden;
+                meta.hidden = hidden;
+                chart.update();
+                btn.classList.toggle('hidden', hidden);
+            });
+
+            grid.appendChild(btn);
         });
-
-        grid.appendChild(btn);
     });
 })();
 </script>

@@ -3,6 +3,7 @@ import sqlite3
 from datetime import datetime
 import os
 from functools import wraps
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'change-this-to-something-secure-in-production')
@@ -111,6 +112,28 @@ def get_db():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+ALLOWED_FACE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
+
+
+def _face_storage_dir():
+    return os.path.join(app.static_folder, 'player_faces')
+
+
+def allowed_face_file(filename):
+    if '.' not in filename:
+        return False
+    return filename.rsplit('.', 1)[1].lower() in ALLOWED_FACE_EXTENSIONS
+
+
+def get_player_face_url(player_id):
+    base_dir = _face_storage_dir()
+    for ext in ('png', 'jpg', 'jpeg', 'webp', 'gif'):
+        path = os.path.join(base_dir, f'{player_id}.{ext}')
+        if os.path.exists(path):
+            return f'/static/player_faces/{player_id}.{ext}'
+    return None
 
 def init_db():
     with get_db() as conn:
@@ -468,6 +491,45 @@ def admin_players():
         'admin_players.html',
         players=players,
         weekly_payment_amount=weekly_payment_amount
+    )
+
+
+@app.route('/admin/player-faces', methods=['GET', 'POST'])
+@login_required
+def admin_player_faces():
+    os.makedirs(_face_storage_dir(), exist_ok=True)
+
+    if request.method == 'POST':
+        player_id = request.form.get('player_id', type=int)
+        file = request.files.get('face_image')
+
+        if not player_id or not file or file.filename == '':
+            return redirect(url_for('admin_player_faces', error='Please choose a player and an image file.'))
+
+        if not allowed_face_file(file.filename):
+            return redirect(url_for('admin_player_faces', error='Invalid file type. Use png, jpg, jpeg, webp, or gif.'))
+
+        extension = secure_filename(file.filename).rsplit('.', 1)[1].lower()
+        for ext in ALLOWED_FACE_EXTENSIONS:
+            old_path = os.path.join(_face_storage_dir(), f'{player_id}.{ext}')
+            if os.path.exists(old_path):
+                os.remove(old_path)
+
+        save_path = os.path.join(_face_storage_dir(), f'{player_id}.{extension}')
+        file.save(save_path)
+
+        return redirect(url_for('admin_player_faces', success='Face image uploaded.'))
+
+    with get_db() as conn:
+        players = conn.execute('SELECT id, name FROM players ORDER BY name').fetchall()
+
+    player_faces = {player['id']: get_player_face_url(player['id']) for player in players}
+    return render_template(
+        'admin_player_faces.html',
+        players=players,
+        player_faces=player_faces,
+        error=request.args.get('error'),
+        success=request.args.get('success')
     )
 
 @app.route('/admin/settings', methods=['GET', 'POST'])
@@ -1608,7 +1670,8 @@ def rankings_timeline():
                 'player_id': pid,
                 'name': name_initial(player_names[pid]),
                 'data': data,
-                'final_rank': final_ranks.get(pid, 9999)
+                'final_rank': final_ranks.get(pid, 9999),
+                'face_url': get_player_face_url(pid)
             })
 
     chart_data = json.dumps({'labels': labels, 'datasets': datasets})
