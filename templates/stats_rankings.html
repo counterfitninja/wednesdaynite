@@ -240,16 +240,25 @@
                 const size = FACE_SIZE;
                 const half = size / 2;
 
+                const firstName = (ds.label || '').split(' ')[0];
+
                 if (ds.pointStyle && ds.pointStyle.width) {
                     ctx.drawImage(ds.pointStyle, x - half, y - half, size, size);
-                    return;
+                } else {
+                    ctx.save();
+                    ctx.fillStyle = ds.borderColor;
+                    ctx.beginPath();
+                    ctx.arc(x, y, half, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
                 }
 
                 ctx.save();
+                ctx.font = `bold ${Math.max(9, half * 0.85)}px sans-serif`;
                 ctx.fillStyle = ds.borderColor;
-                ctx.beginPath();
-                ctx.arc(x, y, half, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.textBaseline = 'middle';
+                ctx.textAlign = 'left';
+                ctx.fillText(firstName, x + half + 3, y);
                 ctx.restore();
             });
         }
