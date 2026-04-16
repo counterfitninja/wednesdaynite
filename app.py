@@ -1642,7 +1642,7 @@ def service_worker():
 def rankings_timeline():
     import json
     current_year = datetime.now().year
-    player_limit_raw = request.args.get('player_limit', '').strip().lower()
+    player_limit_raw = request.args.get('player_limit', '10').strip().lower()
     player_limit_options = [5, 10, 15, 20]
     selected_player_limit = None
 
