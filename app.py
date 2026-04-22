@@ -7,7 +7,10 @@ from PIL import Image, UnidentifiedImageError
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'change-this-to-something-secure-in-production')
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
+# Keep admin sessions alive longer by default; can be overridden via env var.
+session_lifetime_days = int(os.environ.get('SESSION_LIFETIME_DAYS', '180'))
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=session_lifetime_days)
+app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 
 # Build version - timestamp when app starts
 BUILD_VERSION = datetime.now().strftime('%Y.%m.%d.%H%M')
