@@ -38,25 +38,23 @@
 {% if color_player_leaders %}
 <div class="card">
     <h2>Player Colour Win Breakdown</h2>
-    <table>
+    <table id="colour-breakdown-table">
         <thead>
             <tr>
                 <th style="width: 60px;">Rank</th>
-                <th>Player</th>
-                <th style="text-align: center;">Pink Wins</th>
-                <th style="text-align: center;">Yellow Wins</th>
-                <th style="text-align: center;">Total Wins</th>
-                <th style="text-align: center;">Best Colour</th>
+                <th class="sortable" data-sort-key="player" data-sort-type="text" style="cursor: pointer;">Player ↕</th>
+                <th class="sortable" data-sort-key="pink" data-sort-type="number" style="text-align: center; cursor: pointer;">Pink Wins ↕</th>
+                <th class="sortable" data-sort-key="yellow" data-sort-type="number" style="text-align: center; cursor: pointer;">Yellow Wins ↕</th>
+                <th class="sortable" data-sort-key="best" data-sort-type="text" style="text-align: center; cursor: pointer;">Best Colour ↕</th>
             </tr>
         </thead>
         <tbody>
             {% for player in color_player_leaders %}
-            <tr>
+            <tr data-player="{{ player.name_initial|lower }}" data-pink="{{ player.pink_wins }}" data-yellow="{{ player.yellow_wins }}" data-total="{{ player.total_wins }}" data-best="{{ player.best_color|lower }}">
                 <td style="text-align: center;"><strong>#{{ loop.index }}</strong></td>
                 <td><a href="/players/{{ player.id }}/stats" style="color: #2c3e50; text-decoration: none;"><strong>{{ player.name_initial }}</strong></a></td>
                 <td style="text-align: center;"><span class="badge" style="background: #e91e63;">{{ player.pink_wins }}</span></td>
                 <td style="text-align: center;"><span class="badge" style="background: #f39c12;">{{ player.yellow_wins }}</span></td>
-                <td style="text-align: center;"><span class="badge badge-success">{{ player.total_wins }}</span></td>
                 <td style="text-align: center;">
                     {% if player.best_color == 'Pink' %}
                     <strong style="color: #e91e63;">💗 Pink</strong>
@@ -76,5 +74,73 @@
     <p style="text-align: center; color: #7f8c8d; padding: 30px;">No colour win data yet.</p>
 </div>
 {% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const table = document.getElementById('colour-breakdown-table');
+    if (!table) return;
+
+    const tbody = table.querySelector('tbody');
+    const headers = table.querySelectorAll('th.sortable');
+    let activeSortKey = null;
+    let activeSortDirection = 'desc';
+
+    function sortRows(sortKey, sortType, direction) {
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+
+        rows.sort(function (a, b) {
+            let aValue = a.dataset[sortKey] || '';
+            let bValue = b.dataset[sortKey] || '';
+
+            if (sortType === 'number') {
+                aValue = Number(aValue);
+                bValue = Number(bValue);
+            } else {
+                aValue = aValue.toLowerCase();
+                bValue = bValue.toLowerCase();
+            }
+
+            if (aValue < bValue) return direction === 'asc' ? -1 : 1;
+            if (aValue > bValue) return direction === 'asc' ? 1 : -1;
+
+            const aPlayer = a.dataset.player || '';
+            const bPlayer = b.dataset.player || '';
+            if (aPlayer < bPlayer) return -1;
+            if (aPlayer > bPlayer) return 1;
+            return 0;
+        });
+
+        rows.forEach(function (row) {
+            tbody.appendChild(row);
+        });
+
+        activeSortKey = sortKey;
+        activeSortDirection = direction;
+        updateRanks();
+    }
+
+    function updateRanks() {
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        rows.forEach(function (row, index) {
+            const rankCell = row.querySelector('td');
+            if (rankCell) {
+                rankCell.innerHTML = '<strong>#' + (index + 1) + '</strong>';
+            }
+        });
+    }
+
+    headers.forEach(function (header) {
+        header.addEventListener('click', function () {
+            const sortKey = header.dataset.sortKey;
+            const sortType = header.dataset.sortType;
+            const direction = activeSortKey === sortKey && activeSortDirection === 'asc' ? 'desc' : 'asc';
+            sortRows(sortKey, sortType, direction);
+        });
+    });
+
+    // Default order: hidden total wins descending.
+    sortRows('total', 'number', 'desc');
+});
+</script>
 
 {% endblock %}
