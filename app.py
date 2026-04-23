@@ -682,6 +682,8 @@ def players():
 def leaderboard():
     from datetime import datetime
     current_year = datetime.now().year
+    best_active_streak = None
+    best_synergy_pair = None
     
     with get_db() as conn:
         latest_pending = conn.execute('''
@@ -802,6 +804,130 @@ def leaderboard():
             GROUP BY p.id, p.name
             ORDER BY attendance_rate DESC, games_played DESC, p.name
         ''', (str(current_year), total_games_year, total_games_year, str(current_year), total_games_year)).fetchall()
+
+        scored_games = conn.execute('''
+            SELECT id, date, team1_score, team2_score
+            FROM games
+            WHERE team1_score IS NOT NULL
+                AND team2_score IS NOT NULL
+                AND (is_abandoned IS NULL OR is_abandoned = 0)
+                AND strftime('%Y', date) = ?
+            ORDER BY date ASC
+        ''', (str(current_year),)).fetchall()
+
+        if scored_games:
+            game_ids = [g['id'] for g in scored_games]
+            placeholders = ','.join('?' * len(game_ids))
+            assignments = conn.execute(f'''
+                SELECT ta.game_id, ta.player_id, ta.team_number, p.name
+                FROM team_assignments ta
+                JOIN players p ON p.id = ta.player_id
+                WHERE ta.game_id IN ({placeholders})
+                ORDER BY ta.game_id, ta.team_number, p.name
+            ''', game_ids).fetchall()
+
+            game_teams = {}
+            player_names = {}
+            for row in assignments:
+                game_teams.setdefault(row['game_id'], {}).setdefault(row['team_number'], []).append(row['player_id'])
+                player_names[row['player_id']] = row['name']
+
+            streaks = {pid: 0 for pid in player_names.keys()}
+            for game in scored_games:
+                gid = game['id']
+                t1 = game['team1_score']
+                t2 = game['team2_score']
+
+                for team_number in (1, 2):
+                    for pid in game_teams.get(gid, {}).get(team_number, []):
+                        won = (team_number == 1 and t1 > t2) or (team_number == 2 and t2 > t1)
+                        if won:
+                            streaks[pid] += 1
+                        else:
+                            streaks[pid] = 0
+
+            if streaks:
+                best_pid, best_value = max(
+                    streaks.items(),
+                    key=lambda item: (item[1], player_names.get(item[0], '').lower())
+                )
+                best_active_streak = {
+                    'player_id': best_pid,
+                    'name': player_names.get(best_pid, ''),
+                    'name_initial': format_name_with_initial(player_names.get(best_pid, '')),
+                    'streak': best_value
+                }
+
+            pair_stats = {}
+
+            def bump_pair(pid_a, pid_b, result_key):
+                key = (pid_a, pid_b) if pid_a < pid_b else (pid_b, pid_a)
+                if key not in pair_stats:
+                    pair_stats[key] = {'games': 0, 'wins': 0, 'draws': 0, 'losses': 0}
+                pair_stats[key]['games'] += 1
+                pair_stats[key][result_key] += 1
+
+            games_by_id = {g['id']: g for g in scored_games}
+            for gid, teams in game_teams.items():
+                game = games_by_id.get(gid)
+                if not game:
+                    continue
+
+                t1_players = teams.get(1, [])
+                t2_players = teams.get(2, [])
+                t1 = game['team1_score']
+                t2 = game['team2_score']
+
+                if t1 == t2:
+                    team1_result = 'draws'
+                    team2_result = 'draws'
+                elif t1 > t2:
+                    team1_result = 'wins'
+                    team2_result = 'losses'
+                else:
+                    team1_result = 'losses'
+                    team2_result = 'wins'
+
+                for i in range(len(t1_players)):
+                    for j in range(i + 1, len(t1_players)):
+                        bump_pair(t1_players[i], t1_players[j], team1_result)
+
+                for i in range(len(t2_players)):
+                    for j in range(i + 1, len(t2_players)):
+                        bump_pair(t2_players[i], t2_players[j], team2_result)
+
+            min_pair_games = 2
+            eligible_pairs = []
+            for (pid_a, pid_b), stats in pair_stats.items():
+                if stats['games'] < min_pair_games:
+                    continue
+                win_rate = round((stats['wins'] * 100.0 / stats['games']), 1) if stats['games'] > 0 else 0.0
+                eligible_pairs.append({
+                    'pid_a': pid_a,
+                    'pid_b': pid_b,
+                    'player_a': player_names.get(pid_a, ''),
+                    'player_b': player_names.get(pid_b, ''),
+                    'wins': stats['wins'],
+                    'draws': stats['draws'],
+                    'losses': stats['losses'],
+                    'games': stats['games'],
+                    'win_rate': win_rate
+                })
+
+            if eligible_pairs:
+                best_synergy_pair = sorted(
+                    eligible_pairs,
+                    key=lambda row: (
+                        -row['win_rate'],
+                        -row['games'],
+                        row['player_a'].lower(),
+                        row['player_b'].lower()
+                    )
+                )[0]
+                best_synergy_pair['pair_name'] = (
+                    f"{format_name_with_initial(best_synergy_pair['player_a'])} + "
+                    f"{format_name_with_initial(best_synergy_pair['player_b'])}"
+                )
     
     return render_template('leaderboard.html', 
                          leaderboard=leaderboard,
@@ -809,6 +935,8 @@ def leaderboard():
                          total_games=total_games,
                          total_players=len(leaderboard),
                          year=current_year,
+                         best_active_streak=best_active_streak,
+                         best_synergy_pair=best_synergy_pair,
                          final_score_game_id=final_score_target['id'] if final_score_target else None)
 
 @app.route('/players/<int:player_id>/stats')
@@ -1794,6 +1922,327 @@ def rankings_timeline():
         player_limit_options=player_limit_options,
         total_players=total_players,
         shown_players=shown_players
+    )
+
+
+@app.route('/stats/streaks')
+def streak_timeline():
+    import json
+
+    current_year = datetime.now().year
+    player_limit_raw = request.args.get('player_limit', '10').strip().lower()
+    player_limit_options = [5, 10, 15, 20]
+    selected_player_limit = 10
+
+    if player_limit_raw == 'all':
+        selected_player_limit = None
+    else:
+        try:
+            parsed_limit = int(player_limit_raw)
+            if parsed_limit > 0:
+                selected_player_limit = parsed_limit
+        except ValueError:
+            selected_player_limit = 10
+
+    with get_db() as conn:
+        games = conn.execute('''
+            SELECT id, date, team1_score, team2_score
+            FROM games
+            WHERE team1_score IS NOT NULL
+                AND team2_score IS NOT NULL
+                AND (is_abandoned IS NULL OR is_abandoned = 0)
+                AND strftime('%Y', date) = ?
+            ORDER BY date ASC
+        ''', (str(current_year),)).fetchall()
+
+        if not games:
+            return render_template(
+                'stats_streaks.html',
+                chart_data=None,
+                year=current_year,
+                selected_player_limit=selected_player_limit,
+                player_limit_options=player_limit_options,
+                total_players=0,
+                shown_players=0,
+                streak_table=[]
+            )
+
+        game_ids = [g['id'] for g in games]
+        placeholders = ','.join('?' * len(game_ids))
+        assignments = conn.execute(f'''
+            SELECT ta.game_id, ta.player_id, ta.team_number, p.name
+            FROM team_assignments ta
+            JOIN players p ON p.id = ta.player_id
+            WHERE ta.game_id IN ({placeholders})
+            ORDER BY ta.game_id, p.name
+        ''', game_ids).fetchall()
+
+    assignments_by_game = {}
+    player_names = {}
+    for row in assignments:
+        assignments_by_game.setdefault(row['game_id'], []).append(row)
+        player_names[row['player_id']] = row['name']
+
+    all_player_ids = sorted(player_names.keys(), key=lambda pid: player_names[pid].lower())
+    labels = [g['date'] for g in games]
+
+    streak_state = {pid: {'current': 0, 'max': 0, 'games': 0} for pid in all_player_ids}
+    timeline_points = {pid: [] for pid in all_player_ids}
+
+    for game in games:
+        gid = game['id']
+        t1 = game['team1_score']
+        t2 = game['team2_score']
+
+        for pid in all_player_ids:
+            timeline_points[pid].append(None)
+
+        for row in assignments_by_game.get(gid, []):
+            pid = row['player_id']
+            team_number = row['team_number']
+
+            won = (team_number == 1 and t1 > t2) or (team_number == 2 and t2 > t1)
+            if won:
+                streak_state[pid]['current'] += 1
+            else:
+                streak_state[pid]['current'] = 0
+
+            streak_state[pid]['games'] += 1
+            if streak_state[pid]['current'] > streak_state[pid]['max']:
+                streak_state[pid]['max'] = streak_state[pid]['current']
+
+            timeline_points[pid][-1] = streak_state[pid]['current']
+
+    ranked_player_ids = sorted(
+        all_player_ids,
+        key=lambda pid: (
+            -streak_state[pid]['max'],
+            -streak_state[pid]['current'],
+            -streak_state[pid]['games'],
+            player_names[pid].lower()
+        )
+    )
+
+    total_players = len(ranked_player_ids)
+    displayed_player_ids = ranked_player_ids if selected_player_limit is None else ranked_player_ids[:selected_player_limit]
+
+    datasets = []
+    for pid in displayed_player_ids:
+        datasets.append({
+            'player_id': pid,
+            'name': format_name_with_initial(player_names[pid]),
+            'data': timeline_points[pid],
+            'max_streak': streak_state[pid]['max']
+        })
+
+    streak_table = [
+        {
+            'player_id': pid,
+            'name': player_names[pid],
+            'max_streak': streak_state[pid]['max'],
+            'current_streak': streak_state[pid]['current'],
+            'games_played': streak_state[pid]['games']
+        }
+        for pid in ranked_player_ids
+    ]
+
+    chart_data = json.dumps({'labels': labels, 'datasets': datasets})
+    return render_template(
+        'stats_streaks.html',
+        chart_data=chart_data,
+        year=current_year,
+        selected_player_limit=selected_player_limit,
+        player_limit_options=player_limit_options,
+        total_players=total_players,
+        shown_players=len(displayed_player_ids),
+        streak_table=streak_table
+    )
+
+
+@app.route('/stats/synergy')
+def synergy_matrix():
+    current_year = datetime.now().year
+    player_limit_raw = request.args.get('player_limit', '10').strip().lower()
+    min_games_raw = request.args.get('min_games', '2').strip()
+
+    player_limit_options = [8, 10, 12, 16, 20]
+    selected_player_limit = 10
+    min_games = 2
+
+    if player_limit_raw == 'all':
+        selected_player_limit = None
+    else:
+        try:
+            parsed_limit = int(player_limit_raw)
+            if parsed_limit > 0:
+                selected_player_limit = parsed_limit
+        except ValueError:
+            selected_player_limit = 10
+
+    try:
+        parsed_min_games = int(min_games_raw)
+        if parsed_min_games >= 1:
+            min_games = parsed_min_games
+    except ValueError:
+        min_games = 2
+
+    with get_db() as conn:
+        games = conn.execute('''
+            SELECT id, date, team1_score, team2_score
+            FROM games
+            WHERE team1_score IS NOT NULL
+                AND team2_score IS NOT NULL
+                AND (is_abandoned IS NULL OR is_abandoned = 0)
+                AND strftime('%Y', date) = ?
+            ORDER BY date ASC
+        ''', (str(current_year),)).fetchall()
+
+        if not games:
+            return render_template(
+                'stats_synergy.html',
+                year=current_year,
+                matrix_rows=[],
+                selected_players=[],
+                pair_rankings=[],
+                selected_player_limit=selected_player_limit,
+                player_limit_options=player_limit_options,
+                min_games=min_games
+            )
+
+        game_ids = [g['id'] for g in games]
+        placeholders = ','.join('?' * len(game_ids))
+        assignments = conn.execute(f'''
+            SELECT ta.game_id, ta.player_id, ta.team_number, p.name
+            FROM team_assignments ta
+            JOIN players p ON p.id = ta.player_id
+            WHERE ta.game_id IN ({placeholders})
+            ORDER BY ta.game_id, ta.team_number, p.name
+        ''', game_ids).fetchall()
+
+    games_by_id = {g['id']: g for g in games}
+    game_teams = {}
+    player_names = {}
+    player_appearances = {}
+
+    for row in assignments:
+        gid = row['game_id']
+        team_number = row['team_number']
+        pid = row['player_id']
+
+        game_teams.setdefault(gid, {}).setdefault(team_number, []).append(pid)
+        player_names[pid] = row['name']
+        player_appearances[pid] = player_appearances.get(pid, 0) + 1
+
+    pair_stats = {}
+
+    def update_pair(pid_a, pid_b, result_key):
+        key = (pid_a, pid_b) if pid_a < pid_b else (pid_b, pid_a)
+        if key not in pair_stats:
+            pair_stats[key] = {'games': 0, 'wins': 0, 'draws': 0, 'losses': 0}
+        pair_stats[key]['games'] += 1
+        pair_stats[key][result_key] += 1
+
+    for gid, teams in game_teams.items():
+        game = games_by_id.get(gid)
+        if not game:
+            continue
+
+        t1_players = teams.get(1, [])
+        t2_players = teams.get(2, [])
+        t1 = game['team1_score']
+        t2 = game['team2_score']
+
+        if t1 == t2:
+            t1_result = 'draws'
+            t2_result = 'draws'
+        elif t1 > t2:
+            t1_result = 'wins'
+            t2_result = 'losses'
+        else:
+            t1_result = 'losses'
+            t2_result = 'wins'
+
+        for i in range(len(t1_players)):
+            for j in range(i + 1, len(t1_players)):
+                update_pair(t1_players[i], t1_players[j], t1_result)
+
+        for i in range(len(t2_players)):
+            for j in range(i + 1, len(t2_players)):
+                update_pair(t2_players[i], t2_players[j], t2_result)
+
+    sorted_players = sorted(
+        player_appearances.keys(),
+        key=lambda pid: (-player_appearances.get(pid, 0), player_names[pid].lower())
+    )
+    selected_players = sorted_players if selected_player_limit is None else sorted_players[:selected_player_limit]
+
+    matrix_rows = []
+    for row_pid in selected_players:
+        cells = []
+        for col_pid in selected_players:
+            if row_pid == col_pid:
+                cells.append({'type': 'self'})
+                continue
+
+            key = (row_pid, col_pid) if row_pid < col_pid else (col_pid, row_pid)
+            stats = pair_stats.get(key)
+            if not stats or stats['games'] < min_games:
+                cells.append({'type': 'empty'})
+                continue
+
+            win_rate = round((stats['wins'] * 100.0 / stats['games']), 1) if stats['games'] > 0 else 0.0
+            cells.append({
+                'type': 'data',
+                'win_rate': win_rate,
+                'games': stats['games'],
+                'wins': stats['wins'],
+                'draws': stats['draws'],
+                'losses': stats['losses']
+            })
+
+        matrix_rows.append({
+            'player_id': row_pid,
+            'name': player_names[row_pid],
+            'name_initial': format_name_with_initial(player_names[row_pid]),
+            'games_played': player_appearances.get(row_pid, 0),
+            'cells': cells
+        })
+
+    pair_rankings = []
+    for (pid_a, pid_b), stats in pair_stats.items():
+        if stats['games'] < min_games:
+            continue
+        win_rate = round((stats['wins'] * 100.0 / stats['games']), 1) if stats['games'] > 0 else 0.0
+        pair_rankings.append({
+            'player_a': player_names[pid_a],
+            'player_b': player_names[pid_b],
+            'wins': stats['wins'],
+            'draws': stats['draws'],
+            'losses': stats['losses'],
+            'games': stats['games'],
+            'win_rate': win_rate
+        })
+
+    pair_rankings.sort(key=lambda r: (-r['win_rate'], -r['games'], r['player_a'].lower(), r['player_b'].lower()))
+
+    selected_headers = [
+        {
+            'player_id': pid,
+            'name': player_names[pid],
+            'name_initial': format_name_with_initial(player_names[pid])
+        }
+        for pid in selected_players
+    ]
+
+    return render_template(
+        'stats_synergy.html',
+        year=current_year,
+        matrix_rows=matrix_rows,
+        selected_players=selected_headers,
+        pair_rankings=pair_rankings,
+        selected_player_limit=selected_player_limit,
+        player_limit_options=player_limit_options,
+        min_games=min_games
     )
 
 
