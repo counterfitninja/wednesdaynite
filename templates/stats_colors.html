@@ -42,10 +42,10 @@
         <thead>
             <tr>
                 <th style="width: 60px;">Rank</th>
-                <th class="sortable" data-sort-key="player" data-sort-type="text" style="cursor: pointer;">Player ↕</th>
-                <th class="sortable" data-sort-key="pink" data-sort-type="number" style="text-align: center; cursor: pointer;">Pink Wins ↕</th>
-                <th class="sortable" data-sort-key="yellow" data-sort-type="number" style="text-align: center; cursor: pointer;">Yellow Wins ↕</th>
-                <th class="sortable" data-sort-key="best" data-sort-type="text" style="text-align: center; cursor: pointer;">Best Colour ↕</th>
+                <th class="sortable" data-sort-key="player" data-sort-type="text" data-sort-label="Player" style="cursor: pointer;">Player <span class="sort-indicator">↕</span></th>
+                <th class="sortable" data-sort-key="pink" data-sort-type="number" data-sort-label="Pink Wins" style="text-align: center; cursor: pointer;">Pink Wins <span class="sort-indicator">↕</span></th>
+                <th class="sortable" data-sort-key="yellow" data-sort-type="number" data-sort-label="Yellow Wins" style="text-align: center; cursor: pointer;">Yellow Wins <span class="sort-indicator">↕</span></th>
+                <th class="sortable" data-sort-key="best" data-sort-type="text" data-sort-label="Best Colour" style="text-align: center; cursor: pointer;">Best Colour <span class="sort-indicator">↕</span></th>
             </tr>
         </thead>
         <tbody>
@@ -117,6 +117,7 @@ document.addEventListener('DOMContentLoaded', function () {
         activeSortKey = sortKey;
         activeSortDirection = direction;
         updateRanks();
+        updateHeaderIndicators();
     }
 
     function updateRanks() {
@@ -125,6 +126,19 @@ document.addEventListener('DOMContentLoaded', function () {
             const rankCell = row.querySelector('td');
             if (rankCell) {
                 rankCell.innerHTML = '<strong>#' + (index + 1) + '</strong>';
+            }
+        });
+    }
+
+    function updateHeaderIndicators() {
+        headers.forEach(function (header) {
+            const indicator = header.querySelector('.sort-indicator');
+            if (!indicator) return;
+
+            if (header.dataset.sortKey === activeSortKey) {
+                indicator.textContent = activeSortDirection === 'asc' ? '▲' : '▼';
+            } else {
+                indicator.textContent = '↕';
             }
         });
     }
