@@ -773,6 +773,7 @@ def leaderboard():
 
         # Attendance leaderboard for current year.
         # Denominator is all non-abandoned games in the year.
+        # Explicitly filter out abandoned games to ensure they're never included.
         attendance_data = conn.execute('''
             SELECT 
                 p.id,
@@ -780,7 +781,7 @@ def leaderboard():
                 COUNT(DISTINCT CASE
                     WHEN a.status = 'playing'
                         AND g.date <= date('now')
-                        AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+                        AND g.is_abandoned = 0
                         AND strftime('%Y', g.date) = ?
                     THEN a.game_id END) as games_played,
                 ? as total_games,
@@ -789,7 +790,7 @@ def leaderboard():
                     THEN ROUND(COUNT(DISTINCT CASE
                         WHEN a.status = 'playing'
                             AND g.date <= date('now')
-                            AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+                            AND g.is_abandoned = 0
                             AND strftime('%Y', g.date) = ?
                         THEN a.game_id END) * 100.0 / ?, 1)
                     ELSE 0 
@@ -797,6 +798,7 @@ def leaderboard():
             FROM players p
             LEFT JOIN attendance a ON p.id = a.player_id
             LEFT JOIN games g ON a.game_id = g.id
+            WHERE g.id IS NULL OR g.is_abandoned = 0
             GROUP BY p.id, p.name
             ORDER BY attendance_rate DESC, games_played DESC, p.name
         ''', (str(current_year), total_games_year, total_games_year, str(current_year), total_games_year)).fetchall()
