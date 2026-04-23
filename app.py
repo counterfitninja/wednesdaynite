@@ -677,6 +677,10 @@ def players():
 def leaderboard():
     from datetime import datetime
     current_year = datetime.now().year
+    color_win_totals = {'pink_wins': 0, 'yellow_wins': 0, 'draws': 0}
+    color_player_leaders = []
+    top_pink_winner = None
+    top_yellow_winner = None
     
     with get_db() as conn:
         latest_pending = conn.execute('''
@@ -766,6 +770,83 @@ def leaderboard():
                 AND strftime('%Y', date) = ?
         ''', (str(current_year),)).fetchone()['count']
 
+        color_totals_row = conn.execute('''
+            SELECT
+                SUM(CASE WHEN team1_score > team2_score THEN 1 ELSE 0 END) as pink_wins,
+                SUM(CASE WHEN team2_score > team1_score THEN 1 ELSE 0 END) as yellow_wins,
+                SUM(CASE WHEN team1_score = team2_score THEN 1 ELSE 0 END) as draws
+            FROM games
+            WHERE team1_score IS NOT NULL
+                AND team2_score IS NOT NULL
+                AND (is_abandoned IS NULL OR is_abandoned = 0)
+                AND strftime('%Y', date) = ?
+        ''', (str(current_year),)).fetchone()
+
+        if color_totals_row:
+            color_win_totals = {
+                'pink_wins': color_totals_row['pink_wins'] or 0,
+                'yellow_wins': color_totals_row['yellow_wins'] or 0,
+                'draws': color_totals_row['draws'] or 0
+            }
+
+        color_player_rows = conn.execute('''
+            SELECT
+                p.id,
+                p.name,
+                SUM(CASE
+                    WHEN ta.team_number = 1 AND g.team1_score > g.team2_score
+                    THEN 1 ELSE 0
+                END) as pink_wins,
+                SUM(CASE
+                    WHEN ta.team_number = 2 AND g.team2_score > g.team1_score
+                    THEN 1 ELSE 0
+                END) as yellow_wins,
+                SUM(CASE
+                    WHEN (ta.team_number = 1 AND g.team1_score > g.team2_score) OR
+                         (ta.team_number = 2 AND g.team2_score > g.team1_score)
+                    THEN 1 ELSE 0
+                END) as total_wins
+            FROM players p
+            JOIN team_assignments ta ON p.id = ta.player_id
+            JOIN games g ON ta.game_id = g.id
+            WHERE g.team1_score IS NOT NULL
+                AND g.team2_score IS NOT NULL
+                AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+                AND strftime('%Y', g.date) = ?
+            GROUP BY p.id, p.name
+            HAVING total_wins > 0
+            ORDER BY total_wins DESC, p.name
+        ''', (str(current_year),)).fetchall()
+
+        for row in color_player_rows:
+            pink_wins = row['pink_wins'] or 0
+            yellow_wins = row['yellow_wins'] or 0
+            best_color = 'Pink'
+            if yellow_wins > pink_wins:
+                best_color = 'Yellow'
+            elif yellow_wins == pink_wins:
+                best_color = 'Even'
+
+            color_player_leaders.append({
+                'id': row['id'],
+                'name': row['name'],
+                'name_initial': format_name_with_initial(row['name']),
+                'pink_wins': pink_wins,
+                'yellow_wins': yellow_wins,
+                'total_wins': row['total_wins'] or 0,
+                'best_color': best_color
+            })
+
+        if color_player_leaders:
+            top_pink_winner = sorted(
+                color_player_leaders,
+                key=lambda row: (-row['pink_wins'], -row['total_wins'], row['name'].lower())
+            )[0]
+            top_yellow_winner = sorted(
+                color_player_leaders,
+                key=lambda row: (-row['yellow_wins'], -row['total_wins'], row['name'].lower())
+            )[0]
+
         # Attendance leaderboard for current year.
         # Denominator is all non-abandoned games in the year.
         attendance_data = conn.execute('''
@@ -802,6 +883,10 @@ def leaderboard():
                          total_games=total_games,
                          total_players=len(leaderboard),
                          year=current_year,
+                         color_win_totals=color_win_totals,
+                         color_player_leaders=color_player_leaders,
+                         top_pink_winner=top_pink_winner,
+                         top_yellow_winner=top_yellow_winner,
                          final_score_game_id=final_score_target['id'] if final_score_target else None)
 
 @app.route('/players/<int:player_id>/stats')
