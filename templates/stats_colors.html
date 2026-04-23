@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Wins By Colour - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+    <a href="/leaderboard" class="btn">← Leaderboard</a>
+    <a href="/stats/streaks" class="btn">🔥 Streak Timeline</a>
+    <a href="/stats/synergy" class="btn">🤝 Synergy Matrix</a>
+    <a href="/stats/rankings" class="btn">📈 Rankings Timeline</a>
+</div>
+
+<div class="card">
+    <h1>🎨 Wins By Colour {{ year }}</h1>
+    <p style="color: #7f8c8d; margin-top: 6px;">
+        Pink = Team 1, Yellow = Team 2. Overall team color win rates and per-player breakdown.
+    </p>
+</div>
+
+<div class="card">
+    <h2>Overall Colour Stats</h2>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0 16px 0;">
+        <span class="badge" style="background: #e91e63;">💗 Pink wins: {{ color_win_totals.pink_wins }}</span>
+        <span class="badge" style="background: #f1c40f; color: #2c3e50;">💛 Yellow wins: {{ color_win_totals.yellow_wins }}</span>
+        <span class="badge" style="background: #95a5a6;">🤝 Draws: {{ color_win_totals.draws }}</span>
+    </div>
+
+    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px;">
+        {% if top_pink_winner and top_pink_winner.pink_wins > 0 %}
+        <span class="badge" style="background: #e91e63;">👑 Top Pink Winner: {{ top_pink_winner.name_initial }} ({{ top_pink_winner.pink_wins }})</span>
+        {% endif %}
+        {% if top_yellow_winner and top_yellow_winner.yellow_wins > 0 %}
+        <span class="badge" style="background: #f39c12;">👑 Top Yellow Winner: {{ top_yellow_winner.name_initial }} ({{ top_yellow_winner.yellow_wins }})</span>
+        {% endif %}
+    </div>
+</div>
+
+{% if color_player_leaders %}
+<div class="card">
+    <h2>Player Colour Win Breakdown</h2>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 60px;">Rank</th>
+                <th>Player</th>
+                <th style="text-align: center;">Pink Wins</th>
+                <th style="text-align: center;">Yellow Wins</th>
+                <th style="text-align: center;">Total Wins</th>
+                <th style="text-align: center;">Best Colour</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for player in color_player_leaders %}
+            <tr>
+                <td style="text-align: center;"><strong>#{{ loop.index }}</strong></td>
+                <td><a href="/players/{{ player.id }}/stats" style="color: #2c3e50; text-decoration: none;"><strong>{{ player.name_initial }}</strong></a></td>
+                <td style="text-align: center;"><span class="badge" style="background: #e91e63;">{{ player.pink_wins }}</span></td>
+                <td style="text-align: center;"><span class="badge" style="background: #f39c12;">{{ player.yellow_wins }}</span></td>
+                <td style="text-align: center;"><span class="badge badge-success">{{ player.total_wins }}</span></td>
+                <td style="text-align: center;">
+                    {% if player.best_color == 'Pink' %}
+                    <strong style="color: #e91e63;">💗 Pink</strong>
+                    {% elif player.best_color == 'Yellow' %}
+                    <strong style="color: #f39c12;">💛 Yellow</strong>
+                    {% else %}
+                    <strong style="color: #7f8c8d;">Even</strong>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card">
+    <p style="text-align: center; color: #7f8c8d; padding: 30px;">No colour win data yet.</p>
+</div>
+{% endif %}
+
+{% endblock %}
