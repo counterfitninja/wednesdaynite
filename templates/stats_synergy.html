@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Teammate Synergy Matrix - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<style>
+    .matrix-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .matrix-table {
+        border-collapse: separate;
+        border-spacing: 2px;
+        min-width: 620px;
+    }
+    .matrix-table th,
+    .matrix-table td {
+        border-bottom: none;
+        text-align: center;
+        padding: 8px;
+    }
+    .matrix-table th {
+        background: #f4f6f8;
+        font-size: 0.85em;
+    }
+    .matrix-row-label {
+        text-align: left !important;
+        white-space: nowrap;
+        position: sticky;
+        left: 0;
+        background: #f8f9fa;
+        z-index: 1;
+    }
+    .matrix-cell {
+        min-width: 76px;
+        border-radius: 6px;
+        color: #1f2933;
+        font-size: 0.85em;
+        line-height: 1.3;
+    }
+    .matrix-cell small {
+        display: block;
+        font-size: 0.75em;
+        opacity: 0.8;
+    }
+    .matrix-self {
+        background: #e9ecef;
+        color: #7f8c8d;
+        font-weight: 700;
+    }
+    .matrix-empty {
+        background: #f8f9fa;
+        color: #bdc3c7;
+    }
+</style>
+
+<div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+    <a href="/leaderboard" class="btn">← Leaderboard</a>
+    <a href="/stats/streaks" class="btn">🔥 Streak Timeline</a>
+    <a href="/stats/rankings" class="btn">📈 Rankings</a>
+</div>
+
+<div class="card">
+    <h1>🤝 Teammate Synergy Matrix {{ year }}</h1>
+    <p style="color: #7f8c8d; margin-top: 6px;">
+        Pair win-rate when two players are on the same team. Darker green means stronger partnership.
+    </p>
+    <form method="get" action="{{ url_for('synergy_matrix') }}" style="margin-top: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <label for="player_limit" style="font-weight: 600; color: #2c3e50;">Players in matrix:</label>
+        <select id="player_limit" name="player_limit" onchange="this.form.submit()" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #d0d7de;">
+            <option value="all" {% if selected_player_limit is none %}selected{% endif %}>All</option>
+            {% for limit in player_limit_options %}
+            <option value="{{ limit }}" {% if selected_player_limit == limit %}selected{% endif %}>Top {{ limit }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="min_games" style="font-weight: 600; color: #2c3e50;">Min pair games:</label>
+        <input id="min_games" type="number" min="1" max="30" name="min_games" value="{{ min_games }}" style="width: 90px; padding: 6px 10px; border-radius: 8px; border: 1px solid #d0d7de;">
+
+        <button type="submit" class="btn">Apply</button>
+    </form>
+</div>
+
+{% if matrix_rows %}
+<div class="card">
+    <h2>Matrix View</h2>
+    <div class="matrix-wrap">
+        <table class="matrix-table">
+            <thead>
+                <tr>
+                    <th>Player</th>
+                    {% for col in selected_players %}
+                    <th title="{{ col.name }}">{{ col.name_initial }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in matrix_rows %}
+                <tr>
+                    <td class="matrix-row-label" title="{{ row.name }}">{{ row.name_initial }}</td>
+                    {% for cell in row.cells %}
+                        {% if cell.type == 'self' %}
+                        <td class="matrix-cell matrix-self">—</td>
+                        {% elif cell.type == 'empty' %}
+                        <td class="matrix-cell matrix-empty">·</td>
+                        {% else %}
+                        {% set alpha = (cell.win_rate / 100.0) * 0.75 + 0.12 %}
+                        <td class="matrix-cell" style="background: rgba(39, 174, 96, {{ '%.2f'|format(alpha) }});" title="{{ cell.wins }}W {{ cell.draws }}D {{ cell.losses }}L in {{ cell.games }} games">
+                            <strong>{{ cell.win_rate }}%</strong>
+                            <small>{{ cell.games }} games</small>
+                        </td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Top Synergy Pairs</h2>
+    {% if pair_rankings %}
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 60px;">Rank</th>
+                <th>Pair</th>
+                <th style="text-align: center;">Record</th>
+                <th style="text-align: center;">Games</th>
+                <th style="text-align: center;">Win Rate</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for pair in pair_rankings[:30] %}
+            <tr>
+                <td style="text-align: center;"><strong>#{{ loop.index }}</strong></td>
+                <td>{{ pair.player_a|name_initial }} + {{ pair.player_b|name_initial }}</td>
+                <td style="text-align: center;">{{ pair.wins }}-{{ pair.draws }}-{{ pair.losses }}</td>
+                <td style="text-align: center;">{{ pair.games }}</td>
+                <td style="text-align: center;"><span class="badge" style="background: #27ae60;">{{ pair.win_rate }}%</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; color: #7f8c8d; padding: 20px;">No pairings meet the minimum games filter.</p>
+    {% endif %}
+</div>
+{% else %}
+<div class="card">
+    <p style="text-align: center; color: #7f8c8d; padding: 30px;">No scored games found for {{ year }}.</p>
+</div>
+{% endif %}
+{% endblock %}
