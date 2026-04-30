@@ -1,9 +1,11 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, session
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session, make_response
 import sqlite3
 from datetime import datetime, timedelta
 import os
 from functools import wraps
-from PIL import Image, UnidentifiedImageError
+import html
+from io import BytesIO
+from PIL import Image, ImageDraw, ImageFont, UnidentifiedImageError
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'change-this-to-something-secure-in-production')
@@ -1109,6 +1111,176 @@ def wall_of_praise():
         ''').fetchall()
 
     return render_template('wall_of_praise.html', contributors=contributors)
+
+
+@app.route('/wall-of-praise/shield.svg')
+def wall_of_praise_shield():
+    with get_db() as conn:
+        contributors = conn.execute('''
+            SELECT p.name
+            FROM players p
+            WHERE COALESCE(p.one_off_ball_contributor, 0) = 1
+            ORDER BY p.name
+        ''').fetchall()
+
+    names = [row['name'] for row in contributors]
+    display_names = names[:28]
+
+    start_y = 232
+    line_height = 34
+    base_height = 340
+    dynamic_height = max(base_height, start_y + (max(len(display_names), 1) * line_height) + 58)
+
+    if display_names:
+        name_lines = '\n'.join(
+            f'<text x="400" y="{start_y + (idx * line_height)}" text-anchor="middle" font-size="21" fill="#f8f9fa" font-family="Trebuchet MS, Segoe UI, sans-serif">{html.escape(name)}</text>'
+            for idx, name in enumerate(display_names)
+        )
+    else:
+        name_lines = (
+            '<text x="400" y="232" text-anchor="middle" font-size="21" '
+            'fill="#f8f9fa" font-family="Trebuchet MS, Segoe UI, sans-serif">'
+            'No contributors selected yet</text>'
+        )
+
+    truncated_note = ''
+    if len(names) > len(display_names):
+        truncated_note = (
+            f'<text x="400" y="{dynamic_height - 26}" text-anchor="middle" font-size="14" '
+            'fill="#d9e0ea" font-family="Trebuchet MS, Segoe UI, sans-serif">'
+            f'+{len(names) - len(display_names)} more supporter(s)</text>'
+        )
+
+    generated_on = datetime.now().strftime('%d %b %Y')
+
+    svg = f'''<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="{dynamic_height}" viewBox="0 0 800 {dynamic_height}">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1b2a"/>
+      <stop offset="60%" stop-color="#1b263b"/>
+      <stop offset="100%" stop-color="#415a77"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#c89f2f"/>
+      <stop offset="50%" stop-color="#f4d35e"/>
+      <stop offset="100%" stop-color="#c89f2f"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="800" height="{dynamic_height}" fill="url(#bg)"/>
+  <rect x="28" y="28" width="744" height="{dynamic_height - 56}" rx="22" fill="rgba(255,255,255,0.06)" stroke="url(#gold)" stroke-width="3"/>
+
+  <text x="400" y="88" text-anchor="middle" font-size="42" font-weight="bold" fill="url(#gold)" font-family="Trebuchet MS, Segoe UI, sans-serif">WALL OF PRAISE</text>
+  <text x="400" y="122" text-anchor="middle" font-size="20" fill="#f5f3ee" font-family="Trebuchet MS, Segoe UI, sans-serif">One-off supporters for the new ball</text>
+  <text x="400" y="158" text-anchor="middle" font-size="14" fill="#d9e0ea" font-family="Trebuchet MS, Segoe UI, sans-serif">Generated {generated_on}</text>
+
+  {name_lines}
+  {truncated_note}
+</svg>
+'''
+
+    response = make_response(svg)
+    response.headers['Content-Type'] = 'image/svg+xml; charset=utf-8'
+    response.headers['Content-Disposition'] = 'attachment; filename="wall-of-praise-shield.svg"'
+    return response
+
+
+@app.route('/wall-of-praise/shield.png')
+def wall_of_praise_shield_png():
+    with get_db() as conn:
+        contributors = conn.execute('''
+            SELECT p.name
+            FROM players p
+            WHERE COALESCE(p.one_off_ball_contributor, 0) = 1
+            ORDER BY p.name
+        ''').fetchall()
+
+    names = [row['name'] for row in contributors]
+    display_names = names[:28]
+
+    width = 1000
+    start_y = 290
+    line_height = 42
+    base_height = 460
+    height = max(base_height, start_y + (max(len(display_names), 1) * line_height) + 70)
+
+    image = Image.new('RGB', (width, height), '#0d1b2a')
+    draw = ImageDraw.Draw(image)
+
+    # Vertical gradient background.
+    top = (13, 27, 42)
+    bottom = (65, 90, 119)
+    for y in range(height):
+        t = y / max(height - 1, 1)
+        r = int(top[0] + (bottom[0] - top[0]) * t)
+        g = int(top[1] + (bottom[1] - top[1]) * t)
+        b = int(top[2] + (bottom[2] - top[2]) * t)
+        draw.line([(0, y), (width, y)], fill=(r, g, b))
+
+    panel_margin = 34
+    panel_radius = 24
+    panel_fill = (255, 255, 255, 18)
+    gold = (244, 211, 94)
+    draw.rounded_rectangle(
+        [
+            panel_margin,
+            panel_margin,
+            width - panel_margin,
+            height - panel_margin
+        ],
+        radius=panel_radius,
+        fill=panel_fill,
+        outline=gold,
+        width=4
+    )
+
+    def get_font(size):
+        for candidate in ('arial.ttf', 'segoeui.ttf', 'tahoma.ttf'):
+            try:
+                return ImageFont.truetype(candidate, size)
+            except OSError:
+                continue
+        return ImageFont.load_default()
+
+    title_font = get_font(54)
+    subtitle_font = get_font(28)
+    meta_font = get_font(18)
+    name_font = get_font(29)
+    note_font = get_font(18)
+
+    def draw_centered(text, y, font, fill):
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_w = bbox[2] - bbox[0]
+        x = (width - text_w) // 2
+        draw.text((x, y), text, font=font, fill=fill)
+
+    draw_centered('WALL OF PRAISE', 94, title_font, gold)
+    draw_centered('One-off supporters for the new ball', 158, subtitle_font, (245, 243, 238))
+    draw_centered(f"Generated {datetime.now().strftime('%d %b %Y')}", 202, meta_font, (217, 224, 234))
+
+    if display_names:
+        for idx, name in enumerate(display_names):
+            draw_centered(name, start_y + (idx * line_height), name_font, (248, 249, 250))
+    else:
+        draw_centered('No contributors selected yet', start_y, name_font, (248, 249, 250))
+
+    if len(names) > len(display_names):
+        draw_centered(
+            f"+{len(names) - len(display_names)} more supporter(s)",
+            height - 52,
+            note_font,
+            (217, 224, 234)
+        )
+
+    png_bytes = BytesIO()
+    image.save(png_bytes, format='PNG')
+    png_bytes.seek(0)
+
+    response = make_response(png_bytes.getvalue())
+    response.headers['Content-Type'] = 'image/png'
+    response.headers['Content-Disposition'] = 'attachment; filename="wall-of-praise-shield.png"'
+    return response
 
 @app.route('/players/add', methods=['GET', 'POST'])
 def add_player():
