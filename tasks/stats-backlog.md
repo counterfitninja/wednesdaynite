@@ -4,7 +4,7 @@ Work through one per week. Mark completed items with ✅.
 
 1. **Form Guide (Last 5 Results)** — W/D/L dot row on leaderboard showing each player's last 5 results.
 2. **Score Margins Page** — `/stats/margins`: avg goal diff, biggest wins/losses, "clinical" ranking.
-3. **Nemesis / Rival Matrix** — Opponent win rates (who beats who). Flip of Synergy Matrix using same data.
+3. ✅ **Nemesis / Rival Matrix** — Opponent win rates (who beats who). Flip of Synergy Matrix using same data.
 4. **Attendance Streak Tracker** — Longest consecutive week attendance streaks, current + all-time.
 5. **Head-to-Head Comparison** — `/stats/h2h?a=X&b=Y`: W/D/L, win rate, synergy together, record as opponents.
 6. **All-Time / Career Stats** — Year selector on leaderboard + player stats, plus all-time aggregate view.

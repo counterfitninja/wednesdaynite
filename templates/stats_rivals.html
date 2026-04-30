@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Teammate Synergy Matrix - Wednesday Night FC{% endblock %}
+{% block title %}Nemesis / Rival Matrix - Wednesday Night FC{% endblock %}
 
 {% block content %}
 <style>
@@ -41,7 +41,7 @@
     .matrix-cell small {
         display: block;
         font-size: 0.75em;
-        opacity: 0.8;
+        opacity: 0.85;
     }
     .matrix-self {
         background: #e9ecef;
@@ -59,17 +59,17 @@
     <a href="/leaderboard?tab=attendance" class="btn" style="background: #3498db;">📊 Attendance</a>
     <a href="/stats/colors" class="btn" style="background: #e91e63;">🎨 Wins By Colour</a>
     <a href="/stats/streaks" class="btn" style="background: #e67e22;">🔥 Streak Timeline</a>
-    <a href="/stats/synergy" class="btn" style="background: #16a085; box-shadow: inset 0 0 0 2px #1f2d3a;">🤝 Synergy Matrix</a>
-    <a href="/stats/rivals" class="btn" style="background: #c0392b;">⚔️ Rival Matrix</a>
+    <a href="/stats/synergy" class="btn" style="background: #16a085;">🤝 Synergy Matrix</a>
+    <a href="/stats/rivals" class="btn" style="background: #c0392b; box-shadow: inset 0 0 0 2px #1f2d3a;">⚔️ Rival Matrix</a>
     <a href="/stats/rankings" class="btn" style="background: #8e44ad;">📈 Rankings Timeline</a>
 </div>
 
 <div class="card">
-    <h1>🤝 Teammate Synergy Matrix {{ year }}</h1>
+    <h1>⚔️ Nemesis / Rival Matrix {{ year }}</h1>
     <p style="color: #7f8c8d; margin-top: 6px;">
-        Pair win-rate when two players are on the same team. Darker green means stronger partnership.
+        Opponent matchup win rate. Each cell shows how often the row player beats the column player when on opposite teams.
     </p>
-    <form method="get" action="{{ url_for('synergy_matrix') }}" style="margin-top: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+    <form method="get" action="{{ url_for('rival_matrix') }}" style="margin-top: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
         <label for="player_limit" style="font-weight: 600; color: #2c3e50;">Players in matrix:</label>
         <select id="player_limit" name="player_limit" onchange="this.form.submit()" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #d0d7de;">
             <option value="all" {% if selected_player_limit is none %}selected{% endif %}>All</option>
@@ -78,7 +78,7 @@
             {% endfor %}
         </select>
 
-        <label for="min_games" style="font-weight: 600; color: #2c3e50;">Min pair games:</label>
+        <label for="min_games" style="font-weight: 600; color: #2c3e50;">Min matchup games:</label>
         <input id="min_games" type="number" min="1" max="30" name="min_games" value="{{ min_games }}" style="width: 90px; padding: 6px 10px; border-radius: 8px; border: 1px solid #d0d7de;">
 
         <button type="submit" class="btn">Apply</button>
@@ -108,8 +108,13 @@
                         {% elif cell.type == 'empty' %}
                         <td class="matrix-cell matrix-empty">·</td>
                         {% else %}
-                        {% set alpha = (cell.win_rate / 100.0) * 0.75 + 0.12 %}
-                        <td class="matrix-cell" style="background: rgba(39, 174, 96, {{ '%.2f'|format(alpha) }});" title="{{ cell.wins }}W {{ cell.draws }}D {{ cell.losses }}L in {{ cell.games }} games">
+                        {% if cell.win_rate >= 50 %}
+                            {% set alpha = ((cell.win_rate - 50.0) / 50.0) * 0.70 + 0.15 %}
+                            <td class="matrix-cell" style="background: rgba(39, 174, 96, {{ '%.2f'|format(alpha) }});" title="{{ cell.wins }}W {{ cell.draws }}D {{ cell.losses }}L in {{ cell.games }} games">
+                        {% else %}
+                            {% set alpha = ((50.0 - cell.win_rate) / 50.0) * 0.70 + 0.15 %}
+                            <td class="matrix-cell" style="background: rgba(231, 76, 60, {{ '%.2f'|format(alpha) }});" title="{{ cell.wins }}W {{ cell.draws }}D {{ cell.losses }}L in {{ cell.games }} games">
+                        {% endif %}
                             <strong>{{ cell.win_rate }}%</strong>
                             <small>{{ cell.games }} games</small>
                         </td>
@@ -123,32 +128,38 @@
 </div>
 
 <div class="card">
-    <h2>Top Synergy Pairs</h2>
-    {% if pair_rankings %}
+    <h2>Top Rival Matchups</h2>
+    {% if rivalry_rankings %}
     <table>
         <thead>
             <tr>
                 <th style="width: 60px;">Rank</th>
-                <th>Pair</th>
+                <th>Matchup</th>
                 <th style="text-align: center;">Record</th>
                 <th style="text-align: center;">Games</th>
                 <th style="text-align: center;">Win Rate</th>
             </tr>
         </thead>
         <tbody>
-            {% for pair in pair_rankings[:30] %}
+            {% for row in rivalry_rankings[:30] %}
             <tr>
                 <td style="text-align: center;"><strong>#{{ loop.index }}</strong></td>
-                <td>{{ pair.player_a|name_initial }} + {{ pair.player_b|name_initial }}</td>
-                <td style="text-align: center;">{{ pair.wins }}-{{ pair.draws }}-{{ pair.losses }}</td>
-                <td style="text-align: center;">{{ pair.games }}</td>
-                <td style="text-align: center;"><span class="badge" style="background: #27ae60;">{{ pair.win_rate }}%</span></td>
+                <td>{{ row.player_a|name_initial }} vs {{ row.player_b|name_initial }}</td>
+                <td style="text-align: center;">{{ row.wins }}-{{ row.draws }}-{{ row.losses }}</td>
+                <td style="text-align: center;">{{ row.games }}</td>
+                <td style="text-align: center;">
+                    {% if row.win_rate >= 50 %}
+                    <span class="badge" style="background: #27ae60;">{{ row.win_rate }}%</span>
+                    {% else %}
+                    <span class="badge" style="background: #e74c3c;">{{ row.win_rate }}%</span>
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
     {% else %}
-    <p style="text-align: center; color: #7f8c8d; padding: 20px;">No pairings meet the minimum games filter.</p>
+    <p style="text-align: center; color: #7f8c8d; padding: 20px;">No rival matchups meet the minimum games filter.</p>
     {% endif %}
 </div>
 {% else %}

@@ -2331,6 +2331,186 @@ def synergy_matrix():
     )
 
 
+@app.route('/stats/rivals')
+def rival_matrix():
+    current_year = datetime.now().year
+    player_limit_raw = request.args.get('player_limit', '10').strip().lower()
+    min_games_raw = request.args.get('min_games', '2').strip()
+
+    player_limit_options = [8, 10, 12, 16, 20]
+    selected_player_limit = 10
+    min_games = 2
+
+    if player_limit_raw == 'all':
+        selected_player_limit = None
+    else:
+        try:
+            parsed_limit = int(player_limit_raw)
+            if parsed_limit > 0:
+                selected_player_limit = parsed_limit
+        except ValueError:
+            selected_player_limit = 10
+
+    try:
+        parsed_min_games = int(min_games_raw)
+        if parsed_min_games >= 1:
+            min_games = parsed_min_games
+    except ValueError:
+        min_games = 2
+
+    with get_db() as conn:
+        games = conn.execute('''
+            SELECT id, date, team1_score, team2_score
+            FROM games
+            WHERE team1_score IS NOT NULL
+                AND team2_score IS NOT NULL
+                AND (is_abandoned IS NULL OR is_abandoned = 0)
+                AND strftime('%Y', date) = ?
+            ORDER BY date ASC
+        ''', (str(current_year),)).fetchall()
+
+        if not games:
+            return render_template(
+                'stats_rivals.html',
+                year=current_year,
+                matrix_rows=[],
+                selected_players=[],
+                rivalry_rankings=[],
+                selected_player_limit=selected_player_limit,
+                player_limit_options=player_limit_options,
+                min_games=min_games
+            )
+
+        game_ids = [g['id'] for g in games]
+        placeholders = ','.join('?' * len(game_ids))
+        assignments = conn.execute(f'''
+            SELECT ta.game_id, ta.player_id, ta.team_number, p.name
+            FROM team_assignments ta
+            JOIN players p ON p.id = ta.player_id
+            WHERE ta.game_id IN ({placeholders})
+            ORDER BY ta.game_id, ta.team_number, p.name
+        ''', game_ids).fetchall()
+
+    games_by_id = {g['id']: g for g in games}
+    game_teams = {}
+    player_names = {}
+    player_appearances = {}
+
+    for row in assignments:
+        gid = row['game_id']
+        team_number = row['team_number']
+        pid = row['player_id']
+
+        game_teams.setdefault(gid, {}).setdefault(team_number, []).append(pid)
+        player_names[pid] = row['name']
+        player_appearances[pid] = player_appearances.get(pid, 0) + 1
+
+    matchup_stats = {}
+
+    def update_matchup(winner_pid, loser_pid, result_key):
+        key = (winner_pid, loser_pid)
+        if key not in matchup_stats:
+            matchup_stats[key] = {'games': 0, 'wins': 0, 'draws': 0, 'losses': 0}
+        matchup_stats[key]['games'] += 1
+        matchup_stats[key][result_key] += 1
+
+    for gid, teams in game_teams.items():
+        game = games_by_id.get(gid)
+        if not game:
+            continue
+
+        t1_players = teams.get(1, [])
+        t2_players = teams.get(2, [])
+        t1 = game['team1_score']
+        t2 = game['team2_score']
+
+        for t1_pid in t1_players:
+            for t2_pid in t2_players:
+                if t1 == t2:
+                    update_matchup(t1_pid, t2_pid, 'draws')
+                    update_matchup(t2_pid, t1_pid, 'draws')
+                elif t1 > t2:
+                    update_matchup(t1_pid, t2_pid, 'wins')
+                    update_matchup(t2_pid, t1_pid, 'losses')
+                else:
+                    update_matchup(t1_pid, t2_pid, 'losses')
+                    update_matchup(t2_pid, t1_pid, 'wins')
+
+    sorted_players = sorted(
+        player_appearances.keys(),
+        key=lambda pid: (-player_appearances.get(pid, 0), player_names[pid].lower())
+    )
+    selected_players = sorted_players if selected_player_limit is None else sorted_players[:selected_player_limit]
+
+    matrix_rows = []
+    for row_pid in selected_players:
+        cells = []
+        for col_pid in selected_players:
+            if row_pid == col_pid:
+                cells.append({'type': 'self'})
+                continue
+
+            stats = matchup_stats.get((row_pid, col_pid))
+            if not stats or stats['games'] < min_games:
+                cells.append({'type': 'empty'})
+                continue
+
+            win_rate = round((stats['wins'] * 100.0 / stats['games']), 1) if stats['games'] > 0 else 0.0
+            cells.append({
+                'type': 'data',
+                'win_rate': win_rate,
+                'games': stats['games'],
+                'wins': stats['wins'],
+                'draws': stats['draws'],
+                'losses': stats['losses']
+            })
+
+        matrix_rows.append({
+            'player_id': row_pid,
+            'name': player_names[row_pid],
+            'name_initial': format_name_with_initial(player_names[row_pid]),
+            'games_played': player_appearances.get(row_pid, 0),
+            'cells': cells
+        })
+
+    rivalry_rankings = []
+    for (pid_a, pid_b), stats in matchup_stats.items():
+        if stats['games'] < min_games:
+            continue
+        win_rate = round((stats['wins'] * 100.0 / stats['games']), 1) if stats['games'] > 0 else 0.0
+        rivalry_rankings.append({
+            'player_a': player_names[pid_a],
+            'player_b': player_names[pid_b],
+            'wins': stats['wins'],
+            'draws': stats['draws'],
+            'losses': stats['losses'],
+            'games': stats['games'],
+            'win_rate': win_rate
+        })
+
+    rivalry_rankings.sort(key=lambda r: (-r['win_rate'], -r['games'], r['player_a'].lower(), r['player_b'].lower()))
+
+    selected_headers = [
+        {
+            'player_id': pid,
+            'name': player_names[pid],
+            'name_initial': format_name_with_initial(player_names[pid])
+        }
+        for pid in selected_players
+    ]
+
+    return render_template(
+        'stats_rivals.html',
+        year=current_year,
+        matrix_rows=matrix_rows,
+        selected_players=selected_headers,
+        rivalry_rankings=rivalry_rankings,
+        selected_player_limit=selected_player_limit,
+        player_limit_options=player_limit_options,
+        min_games=min_games
+    )
+
+
 @app.route('/stats/colors')
 def color_stats():
     from datetime import datetime

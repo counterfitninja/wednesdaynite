@@ -33,6 +33,7 @@
     <a href="/stats/colors" class="btn" style="background: #e91e63;">🎨 Wins By Colour</a>
     <a href="/stats/streaks" class="btn" style="background: #e67e22;">🔥 Streak Timeline</a>
     <a href="/stats/synergy" class="btn" style="background: #16a085;">🤝 Synergy Matrix</a>
+    <a href="/stats/rivals" class="btn" style="background: #c0392b;">⚔️ Rival Matrix</a>
     <a href="/stats/rankings" class="btn" style="background: #8e44ad;">📈 Rankings Timeline</a>
 </div>
 
@@ -53,6 +54,8 @@ function showLeaderboard(type) {
     
     document.getElementById('btn-wins').style.background = type === 'wins' ? '#27ae60' : '#95a5a6';
     document.getElementById('btn-attendance').style.background = type === 'attendance' ? '#3498db' : '#95a5a6';
+    document.getElementById('btn-wins').style.boxShadow = type === 'wins' ? 'inset 0 0 0 2px #1f2d3a' : 'none';
+    document.getElementById('btn-attendance').style.boxShadow = type === 'attendance' ? 'inset 0 0 0 2px #1f2d3a' : 'none';
 }
 
 function updateWinsRankDisplay(rows) {
@@ -195,9 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateWinsSortIndicators();
     updateAttendanceSortIndicators();
     const tab = new URLSearchParams(window.location.search).get('tab');
-    if (tab === 'attendance') {
-        showLeaderboard('attendance');
-    }
+    showLeaderboard(tab === 'attendance' ? 'attendance' : 'wins');
 });
 </script>
 
