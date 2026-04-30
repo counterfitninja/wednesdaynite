@@ -123,10 +123,89 @@ def get_db():
 ALLOWED_FACE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
 FACE_IMAGE_MAX_DIMENSION = 256
 FACE_IMAGE_WEBP_QUALITY = 82
+ALLOWED_CUSTOM_SHIELD_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'svg'}
+CUSTOM_SHIELD_MAX_BYTES = 4 * 1024 * 1024
 
 
 def _face_storage_dir():
     return os.path.join(app.static_folder, 'player_faces')
+
+
+def _wall_asset_dir():
+    return os.path.join(app.static_folder, 'wall_of_praise')
+
+
+def get_custom_shield_file_path():
+    base_dir = _wall_asset_dir()
+    png_path = os.path.join(base_dir, 'custom_shield.png')
+    svg_path = os.path.join(base_dir, 'custom_shield.svg')
+    if os.path.exists(png_path):
+        return png_path
+    if os.path.exists(svg_path):
+        return svg_path
+    return None
+
+
+def get_custom_shield_url():
+    path = get_custom_shield_file_path()
+    if not path:
+        return None
+    if path.endswith('.png'):
+        return '/static/wall_of_praise/custom_shield.png'
+    return '/static/wall_of_praise/custom_shield.svg'
+
+
+def save_custom_shield(upload_file):
+    if not upload_file or upload_file.filename == '':
+        return False, 'Please choose a shield file to upload.'
+
+    if '.' not in upload_file.filename:
+        return False, 'Invalid file name. Use png, jpg, jpeg, webp, or svg.'
+
+    extension = upload_file.filename.rsplit('.', 1)[1].lower()
+    if extension not in ALLOWED_CUSTOM_SHIELD_EXTENSIONS:
+        return False, 'Unsupported file type. Use png, jpg, jpeg, webp, or svg.'
+
+    os.makedirs(_wall_asset_dir(), exist_ok=True)
+
+    for existing in ('custom_shield.png', 'custom_shield.svg'):
+        existing_path = os.path.join(_wall_asset_dir(), existing)
+        if os.path.exists(existing_path):
+            os.remove(existing_path)
+
+    upload_file.stream.seek(0)
+    payload = upload_file.stream.read()
+    if len(payload) > CUSTOM_SHIELD_MAX_BYTES:
+        return False, 'File is too large. Max upload size is 4MB.'
+
+    if extension == 'svg':
+        try:
+            decoded = payload.decode('utf-8')
+        except UnicodeDecodeError:
+            return False, 'Invalid SVG file encoding.'
+
+        if '<svg' not in decoded.lower():
+            return False, 'Invalid SVG file content.'
+
+        with open(os.path.join(_wall_asset_dir(), 'custom_shield.svg'), 'w', encoding='utf-8') as shield_file:
+            shield_file.write(decoded)
+        return True, 'Custom shield uploaded.'
+
+    try:
+        image = Image.open(BytesIO(payload))
+        if image.mode in ('RGBA', 'LA') or (image.mode == 'P' and 'transparency' in image.info):
+            processed = image.convert('RGBA')
+        else:
+            processed = image.convert('RGB')
+
+        max_dimension = 2400
+        processed.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
+        processed.save(os.path.join(_wall_asset_dir(), 'custom_shield.png'), format='PNG')
+        return True, 'Custom shield uploaded.'
+    except UnidentifiedImageError:
+        return False, 'Invalid image file. Please upload a valid PNG/JPG/WEBP/SVG.'
+    except Exception:
+        return False, 'Could not process the uploaded shield file.'
 
 
 def allowed_face_file(filename):
@@ -540,7 +619,10 @@ def admin_players():
     return render_template(
         'admin_players.html',
         players=players,
-        weekly_payment_amount=weekly_payment_amount
+        weekly_payment_amount=weekly_payment_amount,
+        shield_upload_error=request.args.get('shield_upload_error'),
+        shield_upload_success=request.args.get('shield_upload_success'),
+        custom_shield_url=get_custom_shield_url()
     )
 
 
@@ -563,6 +645,16 @@ def update_wall_of_praise_contributors():
         conn.commit()
 
     return redirect(url_for('admin_players'))
+
+
+@app.route('/admin/wall-of-praise/shield-upload', methods=['POST'])
+@login_required
+def upload_wall_of_praise_shield():
+    shield_file = request.files.get('shield_file')
+    ok, message = save_custom_shield(shield_file)
+    if ok:
+        return redirect(url_for('admin_players', shield_upload_success=message))
+    return redirect(url_for('admin_players', shield_upload_error=message))
 
 
 @app.route('/admin/player-faces', methods=['GET', 'POST'])
@@ -1115,6 +1207,22 @@ def wall_of_praise():
 
 @app.route('/wall-of-praise/shield.svg')
 def wall_of_praise_shield():
+    custom_png = os.path.join(_wall_asset_dir(), 'custom_shield.png')
+    custom_svg = os.path.join(_wall_asset_dir(), 'custom_shield.svg')
+    if os.path.exists(custom_svg):
+        with open(custom_svg, 'r', encoding='utf-8') as shield_file:
+            response = make_response(shield_file.read())
+        response.headers['Content-Type'] = 'image/svg+xml; charset=utf-8'
+        response.headers['Content-Disposition'] = 'attachment; filename="wall-of-praise-shield.svg"'
+        return response
+
+    if os.path.exists(custom_png):
+        with open(custom_png, 'rb') as shield_file:
+            response = make_response(shield_file.read())
+        response.headers['Content-Type'] = 'image/png'
+        response.headers['Content-Disposition'] = 'attachment; filename="wall-of-praise-shield.png"'
+        return response
+
     with get_db() as conn:
         contributors = conn.execute('''
             SELECT p.name
@@ -1188,6 +1296,14 @@ def wall_of_praise_shield():
 
 @app.route('/wall-of-praise/shield.png')
 def wall_of_praise_shield_png():
+    custom_png = os.path.join(_wall_asset_dir(), 'custom_shield.png')
+    if os.path.exists(custom_png):
+        with open(custom_png, 'rb') as shield_file:
+            response = make_response(shield_file.read())
+        response.headers['Content-Type'] = 'image/png'
+        response.headers['Content-Disposition'] = 'attachment; filename="wall-of-praise-shield.png"'
+        return response
+
     with get_db() as conn:
         contributors = conn.execute('''
             SELECT p.name

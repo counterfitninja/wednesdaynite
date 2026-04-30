@@ -30,6 +30,14 @@
     </div>
 </div>
 
+{% if shield_upload_success %}
+<div class="alert alert-success">{{ shield_upload_success }}</div>
+{% endif %}
+
+{% if shield_upload_error %}
+<div class="alert alert-error">{{ shield_upload_error }}</div>
+{% endif %}
+
 <div id="merge-panel" class="card" style="display: none; background: #fff3cd; border-left: 4px solid #f39c12; margin-bottom: 20px;">
     <h3 style="color: #856404;">🔀 Merge Players</h3>
     <p style="color: #856404; margin-bottom: 15px;">Merge duplicate players (e.g., wrong spelling). All attendance records from the source player will be moved to the target player, then the source player will be deleted.</p>
@@ -102,6 +110,23 @@ function confirmMerge() {
             {% endfor %}
         </div>
         <button type="submit" class="btn btn-success">Save Wall of Praise List</button>
+    </form>
+</div>
+
+<div class="card" style="border-left: 4px solid #3498db;">
+    <h2 style="margin-bottom: 6px;">Custom Shield Upload</h2>
+    <p style="color: #7f8c8d; margin-bottom: 12px;">
+        Upload your own shield file for downloads on the Wall of Praise page. Supported: PNG, JPG, WEBP, SVG (max 4MB).
+    </p>
+    {% if custom_shield_url %}
+    <p style="margin-bottom: 10px; color: #27ae60; font-weight: 600;">Custom shield is active.</p>
+    {% endif %}
+    <form method="POST" action="/admin/wall-of-praise/shield-upload" enctype="multipart/form-data">
+        <div class="form-group" style="max-width: 460px;">
+            <label for="shield_file"><strong>Shield file</strong></label>
+            <input id="shield_file" type="file" name="shield_file" accept=".png,.jpg,.jpeg,.webp,.svg" required>
+        </div>
+        <button type="submit" class="btn">Upload Custom Shield</button>
     </form>
 </div>
 
