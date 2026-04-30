@@ -194,10 +194,58 @@ function sortAttendanceTable(column) {
 document.addEventListener('DOMContentLoaded', () => {
     updateWinsSortIndicators();
     updateAttendanceSortIndicators();
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    if (tab === 'attendance') {
+        showLeaderboard('attendance');
+    }
 });
 </script>
 
 {% if leaderboard %}
+<div class="card">
+    <h3>📊 Statistics</h3>
+    <div class="leaderboard-stats-grid">
+        <div class="stat">
+            <div class="stat-value" style="color: #27ae60;">{{ total_games }}</div>
+            <div class="stat-label">Games with Scores</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" style="color: #3498db;">{{ total_players }}</div>
+            <div class="stat-label">Players Tracked</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" style="color: #f39c12;">{{ year }}</div>
+            <div class="stat-label">Year</div>
+        </div>
+        <div class="stat">
+            {% if best_active_streak %}
+            <div class="stat-value" style="color: #e67e22;">{{ best_active_streak.streak }}</div>
+            <div class="stat-label">
+                Best Active Streak<br>
+                <a href="/stats/streaks" style="color: #e67e22; text-decoration: none; font-weight: 600;">{{ best_active_streak.name_initial }}</a>
+            </div>
+            {% else %}
+            <div class="stat-value" style="color: #e67e22;">—</div>
+            <div class="stat-label">Best Active Streak</div>
+            {% endif %}
+        </div>
+        <div class="stat">
+            {% if best_synergy_pair %}
+            <div class="stat-value" style="color: #16a085;">{{ best_synergy_pair.win_rate }}%</div>
+            <div class="stat-label">
+                Top Synergy Pair<br>
+                <a href="/stats/synergy" style="color: #16a085; text-decoration: none; font-weight: 600;">{{ best_synergy_pair.pair_name }}</a>
+                <br>
+                {{ best_synergy_pair.games }} games
+            </div>
+            {% else %}
+            <div class="stat-value" style="color: #16a085;">—</div>
+            <div class="stat-label">Top Synergy Pair</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
 <div id="leaderboard-wins" class="card">
     <h2>🏆 Win Leaderboard {{ year }}</h2>
     <table id="wins-table">
@@ -302,50 +350,6 @@ document.addEventListener('DOMContentLoaded', () => {
         No attendance data recorded yet.
     </p>
     {% endif %}
-</div>
-
-<div class="card">
-    <h3>📊 Statistics</h3>
-    <div class="leaderboard-stats-grid">
-        <div class="stat">
-            <div class="stat-value" style="color: #27ae60;">{{ total_games }}</div>
-            <div class="stat-label">Games with Scores</div>
-        </div>
-        <div class="stat">
-            <div class="stat-value" style="color: #3498db;">{{ total_players }}</div>
-            <div class="stat-label">Players Tracked</div>
-        </div>
-        <div class="stat">
-            <div class="stat-value" style="color: #f39c12;">{{ year }}</div>
-            <div class="stat-label">Year</div>
-        </div>
-        <div class="stat">
-            {% if best_active_streak %}
-            <div class="stat-value" style="color: #e67e22;">{{ best_active_streak.streak }}</div>
-            <div class="stat-label">
-                Best Active Streak<br>
-                <a href="/stats/streaks" style="color: #e67e22; text-decoration: none; font-weight: 600;">{{ best_active_streak.name_initial }}</a>
-            </div>
-            {% else %}
-            <div class="stat-value" style="color: #e67e22;">—</div>
-            <div class="stat-label">Best Active Streak</div>
-            {% endif %}
-        </div>
-        <div class="stat">
-            {% if best_synergy_pair %}
-            <div class="stat-value" style="color: #16a085;">{{ best_synergy_pair.win_rate }}%</div>
-            <div class="stat-label">
-                Top Synergy Pair<br>
-                <a href="/stats/synergy" style="color: #16a085; text-decoration: none; font-weight: 600;">{{ best_synergy_pair.pair_name }}</a>
-                <br>
-                {{ best_synergy_pair.games }} games
-            </div>
-            {% else %}
-            <div class="stat-value" style="color: #16a085;">—</div>
-            <div class="stat-label">Top Synergy Pair</div>
-            {% endif %}
-        </div>
-    </div>
 </div>
 
 {% else %}
