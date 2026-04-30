@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0d1b2a">
+    <title>Wall of Praise</title>
+    <style>
+        :root {
+            --bg-1: #0d1b2a;
+            --bg-2: #1b263b;
+            --bg-3: #415a77;
+            --gold: #f4d35e;
+            --cream: #f5f3ee;
+            --text: #f8f9fa;
+            --muted: rgba(248, 249, 250, 0.78);
+            --card: rgba(255, 255, 255, 0.09);
+            --card-border: rgba(255, 255, 255, 0.24);
+            --shadow: 0 16px 44px rgba(0, 0, 0, 0.32);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: "Trebuchet MS", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at 15% 18%, rgba(244, 211, 94, 0.2), transparent 38%),
+                radial-gradient(circle at 85% 8%, rgba(255, 255, 255, 0.1), transparent 35%),
+                linear-gradient(135deg, var(--bg-1), var(--bg-2) 48%, var(--bg-3));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .sheet {
+            width: min(920px, 100%);
+            border-radius: 24px;
+            border: 1px solid var(--card-border);
+            background: var(--card);
+            backdrop-filter: blur(8px);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            animation: reveal 550ms ease-out;
+        }
+
+        .hero {
+            padding: 34px 26px 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+        }
+
+        .title {
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-size: clamp(1.8rem, 4.5vw, 2.7rem);
+            font-weight: 900;
+            color: var(--gold);
+            text-shadow: 0 0 22px rgba(244, 211, 94, 0.28);
+        }
+
+        .subtitle {
+            margin-top: 10px;
+            font-size: clamp(0.95rem, 2.3vw, 1.1rem);
+            color: var(--cream);
+            opacity: 0.92;
+        }
+
+        .list {
+            padding: 22px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            gap: 14px;
+        }
+
+        .person {
+            border: 1px solid rgba(244, 211, 94, 0.32);
+            border-radius: 14px;
+            padding: 14px 12px;
+            background: rgba(13, 27, 42, 0.44);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            animation: slideIn 500ms ease both;
+        }
+
+        .person-name {
+            font-size: 1.04rem;
+            font-weight: 700;
+            color: var(--cream);
+        }
+
+        .person-total {
+            font-size: 0.9rem;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .empty {
+            padding: 32px 24px 36px;
+            text-align: center;
+            color: var(--cream);
+            font-size: 1rem;
+            opacity: 0.95;
+        }
+
+        .footer-note {
+            text-align: center;
+            padding: 0 24px 24px;
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+
+        @keyframes reveal {
+            from {
+                opacity: 0;
+                transform: translateY(12px) scale(0.99);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(7px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 560px) {
+            body {
+                padding: 14px;
+            }
+
+            .hero {
+                padding: 28px 18px 16px;
+            }
+
+            .list {
+                padding: 14px;
+                grid-template-columns: 1fr;
+            }
+
+            .person {
+                padding: 13px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="sheet" aria-label="Wall of Praise">
+        <section class="hero">
+            <h1 class="title">Wall of Praise</h1>
+            <p class="subtitle">Big respect to everyone who made a one-off contribution for the new ball.</p>
+        </section>
+
+        {% if contributors %}
+        <section class="list" aria-label="Contributors">
+            {% for contributor in contributors %}
+            <article class="person" style="animation-delay: {{ loop.index0 * 45 }}ms;">
+                <h2 class="person-name">{{ contributor.name }}</h2>
+                <p class="person-total">One-off supporter</p>
+            </article>
+            {% endfor %}
+        </section>
+        {% else %}
+        <section class="empty">
+            No contributors have been recorded yet.
+        </section>
+        {% endif %}
+
+        <p class="footer-note">Thank you for backing the game.</p>
+    </main>
+</body>
+</html>

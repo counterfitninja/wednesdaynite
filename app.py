@@ -269,6 +269,11 @@ def init_db():
             pass  # Column already exists
 
         try:
+            conn.execute('ALTER TABLE players ADD COLUMN one_off_ball_contributor INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        try:
             conn.execute('ALTER TABLE games ADD COLUMN team1_score INTEGER')
         except sqlite3.OperationalError:
             pass  # Column already exists
@@ -501,6 +506,7 @@ def admin_players():
                 p.email,
                 p.skill_rating,
                 COALESCE(p.payment_exempt, 0) as payment_exempt,
+                COALESCE(p.one_off_ball_contributor, 0) as one_off_ball_contributor,
                 COUNT(DISTINCT CASE
                     WHEN a.status = 'playing'
                         AND g.date <= date('now')
@@ -525,7 +531,7 @@ def admin_players():
             FROM players p
             LEFT JOIN attendance a ON p.id = a.player_id
             LEFT JOIN games g ON a.game_id = g.id
-            GROUP BY p.id, p.name, p.alias, p.phone, p.email, p.skill_rating, p.payment_exempt
+            GROUP BY p.id, p.name, p.alias, p.phone, p.email, p.skill_rating, p.payment_exempt, p.one_off_ball_contributor
             ORDER BY p.name
         ''', (total_games_count, total_games_count, total_games_count)).fetchall()
 
@@ -534,6 +540,27 @@ def admin_players():
         players=players,
         weekly_payment_amount=weekly_payment_amount
     )
+
+
+@app.route('/admin/wall-of-praise/contributors', methods=['POST'])
+@login_required
+def update_wall_of_praise_contributors():
+    selected_player_ids = {
+        int(player_id)
+        for player_id in request.form.getlist('contributor_ids')
+        if str(player_id).isdigit()
+    }
+
+    with get_db() as conn:
+        all_player_ids = [row['id'] for row in conn.execute('SELECT id FROM players').fetchall()]
+        for player_id in all_player_ids:
+            conn.execute(
+                'UPDATE players SET one_off_ball_contributor = ? WHERE id = ?',
+                (1 if player_id in selected_player_ids else 0, player_id)
+            )
+        conn.commit()
+
+    return redirect(url_for('admin_players'))
 
 
 @app.route('/admin/player-faces', methods=['GET', 'POST'])
@@ -1068,6 +1095,20 @@ def player_stats(player_id):
 @app.route('/help')
 def help_page():
     return render_template('help.html')
+
+
+@app.route('/wall-of-praise')
+def wall_of_praise():
+    with get_db() as conn:
+        contributors = conn.execute('''
+            SELECT
+                p.name
+            FROM players p
+            WHERE COALESCE(p.one_off_ball_contributor, 0) = 1
+            ORDER BY p.name
+        ''').fetchall()
+
+    return render_template('wall_of_praise.html', contributors=contributors)
 
 @app.route('/players/add', methods=['GET', 'POST'])
 def add_player():

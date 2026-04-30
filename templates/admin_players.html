@@ -82,6 +82,29 @@ function confirmMerge() {
 }
 </script>
 
+<div class="card" style="border-left: 4px solid #f4d35e;">
+    <h2 style="margin-bottom: 6px;">Wall of Praise Pick List</h2>
+    <p style="color: #7f8c8d; margin-bottom: 14px;">
+        Choose who made the one-off contribution for the new ball. This list powers the public Wall of Praise page.
+    </p>
+    <form method="POST" action="/admin/wall-of-praise/contributors">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 12px; margin-bottom: 14px;">
+            {% for player in players %}
+            <label style="display: flex; align-items: center; gap: 8px; padding: 6px 0;">
+                <input
+                    type="checkbox"
+                    name="contributor_ids"
+                    value="{{ player.id }}"
+                    {% if player.one_off_ball_contributor == 1 %}checked{% endif %}
+                >
+                <span>{{ player.name }}</span>
+            </label>
+            {% endfor %}
+        </div>
+        <button type="submit" class="btn btn-success">Save Wall of Praise List</button>
+    </form>
+</div>
+
 {% if players %}
 <div class="card">
     <table>
