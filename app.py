@@ -1202,7 +1202,14 @@ def wall_of_praise():
             ORDER BY p.name
         ''').fetchall()
 
-    return render_template('wall_of_praise.html', contributors=contributors)
+    custom_shield_url = get_custom_shield_url()
+    shield_preview_url = custom_shield_url if custom_shield_url else '/wall-of-praise/shield.png?preview=1'
+
+    return render_template(
+        'wall_of_praise.html',
+        contributors=contributors,
+        shield_preview_url=shield_preview_url
+    )
 
 
 @app.route('/wall-of-praise/shield.svg')
@@ -1296,12 +1303,15 @@ def wall_of_praise_shield():
 
 @app.route('/wall-of-praise/shield.png')
 def wall_of_praise_shield_png():
+    preview_mode = request.args.get('preview') == '1'
+
     custom_png = os.path.join(_wall_asset_dir(), 'custom_shield.png')
     if os.path.exists(custom_png):
         with open(custom_png, 'rb') as shield_file:
             response = make_response(shield_file.read())
         response.headers['Content-Type'] = 'image/png'
-        response.headers['Content-Disposition'] = 'attachment; filename="wall-of-praise-shield.png"'
+        if not preview_mode:
+            response.headers['Content-Disposition'] = 'attachment; filename="wall-of-praise-shield.png"'
         return response
 
     with get_db() as conn:
@@ -1395,7 +1405,8 @@ def wall_of_praise_shield_png():
 
     response = make_response(png_bytes.getvalue())
     response.headers['Content-Type'] = 'image/png'
-    response.headers['Content-Disposition'] = 'attachment; filename="wall-of-praise-shield.png"'
+    if not preview_mode:
+        response.headers['Content-Disposition'] = 'attachment; filename="wall-of-praise-shield.png"'
     return response
 
 @app.route('/players/add', methods=['GET', 'POST'])

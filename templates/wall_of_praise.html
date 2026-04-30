@@ -108,6 +108,26 @@
             gap: 14px;
         }
 
+        .shield-preview {
+            padding: 20px 22px 8px;
+        }
+
+        .shield-frame {
+            border: 1px solid rgba(244, 211, 94, 0.32);
+            border-radius: 14px;
+            padding: 10px;
+            background: rgba(13, 27, 42, 0.44);
+            max-width: 540px;
+            margin: 0 auto;
+        }
+
+        .shield-frame img {
+            display: block;
+            width: 100%;
+            height: auto;
+            border-radius: 10px;
+        }
+
         .person {
             border: 1px solid rgba(244, 211, 94, 0.32);
             border-radius: 14px;
@@ -197,6 +217,12 @@
             <div class="hero-actions">
                 <button id="download-shield-svg" class="download-btn" type="button">Download Shield (SVG)</button>
                 <button id="download-shield-png" class="download-btn" type="button">Download Shield (PNG)</button>
+            </div>
+        </section>
+
+        <section class="shield-preview" aria-label="Shield Preview">
+            <div class="shield-frame">
+                <img src="{{ shield_preview_url }}" alt="Wall of Praise shield preview">
             </div>
         </section>
 
