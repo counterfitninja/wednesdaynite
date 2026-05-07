@@ -135,6 +135,7 @@ function confirmMerge() {
     <table>
         <thead>
             <tr>
+                <th style="width: 50px;"></th>
                 <th>Name</th>
                 <th class="col-phone">Phone</th>
                 <th>Skill</th>
@@ -154,6 +155,13 @@ function confirmMerge() {
             {% set paid_total = paid_games * weekly_payment_amount %}
             {% set payment_matches = is_exempt or (paid_games == expected_games) %}
             <tr>
+                <td style="text-align: center;">
+                    {% if player.face_url %}
+                    <img src="{{ player.face_url }}" alt="{{ player.name }}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #bdc3c7;">
+                    {% else %}
+                    <div style="width: 32px; height: 32px; border-radius: 50%; border: 1px dashed #bdc3c7; display: inline-flex; align-items: center; justify-content: center; color: #bdc3c7; font-size: 0.7em;">—</div>
+                    {% endif %}
+                </td>
                 <td><strong>{{ player.name }}</strong></td>
                 <td class="col-phone">{{ player.phone or 'N/A' }}</td>
                 <td>
