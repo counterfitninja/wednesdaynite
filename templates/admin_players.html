@@ -156,8 +156,8 @@ function confirmMerge() {
             {% set payment_matches = is_exempt or (paid_games == expected_games) %}
             <tr>
                 <td style="text-align: center;">
-                    {% if player.face_url %}
-                    <img src="{{ player.face_url }}" alt="{{ player.name }}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #bdc3c7;">
+                    {% if player_faces[player.id] %}
+                    <img src="{{ player_faces[player.id] }}" alt="{{ player.name }}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 1px solid #bdc3c7;">
                     {% else %}
                     <div style="width: 32px; height: 32px; border-radius: 50%; border: 1px dashed #bdc3c7; display: inline-flex; align-items: center; justify-content: center; color: #bdc3c7; font-size: 0.7em;">—</div>
                     {% endif %}

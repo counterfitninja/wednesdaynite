@@ -932,9 +932,12 @@ def admin_players():
             ORDER BY p.name
         ''', (total_games_count, total_games_count, total_games_count)).fetchall()
 
+    player_faces = {player['id']: get_player_face_url(player['id']) for player in players}
+
     return render_template(
         'admin_players.html',
         players=players,
+        player_faces=player_faces,
         weekly_payment_amount=weekly_payment_amount,
         shield_upload_error=request.args.get('shield_upload_error'),
         shield_upload_success=request.args.get('shield_upload_success'),
