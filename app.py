@@ -316,17 +316,49 @@ def load_sticker_players():
             ORDER BY name
         ''').fetchall()
 
+        core_players = conn.execute('''
+            SELECT id, name
+            FROM players
+            ORDER BY name
+        ''').fetchall()
+
     players = []
+    seen_names = set()
+
     for row in rows:
         image_url = get_sticker_image_url(row['id'])
         if not image_url:
             continue
 
+        name = (row['name'] or '').strip()
+        if not name:
+            continue
+
+        name_key = name.lower()
+        seen_names.add(name_key)
+
         players.append({
-            'id': row['id'],
-            'name': row['name'],
+            'id': f'sticker-{row["id"]}',
+            'name': name,
             'position': row['position'] or 'Wildcard',
             'image_url': image_url,
+        })
+
+    for row in core_players:
+        name = (row['name'] or '').strip()
+        if not name:
+            continue
+
+        name_key = name.lower()
+        if name_key in seen_names:
+            continue
+
+        seen_names.add(name_key)
+        players.append({
+            'id': f'player-{row["id"]}',
+            'name': name,
+            'position': 'WNFC Player',
+            'image_url': get_player_face_url(row['id']) or '/static/wn.png',
         })
 
     return players
@@ -1358,7 +1390,10 @@ def open_sticker_packet():
         return redirect(
             url_for(
                 'stickers',
-                error=f'Upload at least {STICKER_PACKET_SIZE} player photos before opening a packet.'
+                error=(
+                    f'Need at least {STICKER_PACKET_SIZE} players in the packet pool '
+                    '(uploaded stickers + WNFC player list).'
+                )
             )
         )
 
