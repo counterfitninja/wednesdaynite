@@ -1,0 +1,1 @@
+- When a UI request names a specific element like a packet/logo, apply the change to that element first and avoid adding new interaction patterns elsewhere unless explicitly asked.
