@@ -79,6 +79,15 @@
         overflow: hidden;
         background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
         box-shadow: 0 10px 24px rgba(16, 50, 74, 0.08);
+        cursor: zoom-in;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .album-card:hover,
+    .album-card:focus-visible {
+        transform: translateY(-3px);
+        box-shadow: 0 14px 30px rgba(16, 50, 74, 0.14);
+        outline: none;
     }
 
     .album-card img {
@@ -121,11 +130,17 @@
         transform: translateY(24px) rotateX(8deg) scale(0.96);
         opacity: 0;
         transition: opacity 0.45s ease, transform 0.45s ease;
+        cursor: zoom-in;
     }
 
     .packet-card.is-visible {
         opacity: 1;
         transform: translateY(0) rotateX(0) scale(1);
+    }
+
+    .packet-card:focus-visible {
+        outline: 3px solid rgba(255, 255, 255, 0.75);
+        outline-offset: 3px;
     }
 
     .packet-card.shiny {
@@ -269,6 +284,67 @@
         filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.35));
     }
 
+    .sticker-lightbox {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(4, 14, 22, 0.82);
+        backdrop-filter: blur(8px);
+        z-index: 1000;
+    }
+
+    .sticker-lightbox.is-open {
+        display: flex;
+    }
+
+    .sticker-lightbox-panel {
+        width: min(420px, 100%);
+        border-radius: 24px;
+        overflow: hidden;
+        background: linear-gradient(180deg, #fefefe 0%, #eef5f8 100%);
+        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.36);
+    }
+
+    .sticker-lightbox-image {
+        display: block;
+        width: 100%;
+        max-height: min(72vh, 640px);
+        object-fit: contain;
+        background: linear-gradient(180deg, #dde9f0 0%, #f8fbfd 100%);
+    }
+
+    .sticker-lightbox-body {
+        padding: 16px 18px 18px;
+    }
+
+    .sticker-lightbox-body h3 {
+        margin-bottom: 4px;
+        color: #173f5f;
+    }
+
+    .sticker-lightbox-body p {
+        margin: 0;
+        color: #607284;
+    }
+
+    .sticker-lightbox-close {
+        position: absolute;
+        top: 18px;
+        right: 18px;
+        width: 42px;
+        height: 42px;
+        border: none;
+        border-radius: 999px;
+        background: rgba(7, 17, 26, 0.78);
+        color: white;
+        font-size: 1.4rem;
+        line-height: 1;
+        cursor: pointer;
+    }
+
     @media (max-width: 880px) {
         .sticker-layout {
             grid-template-columns: 1fr;
@@ -308,7 +384,7 @@
 
         <div class="packet-grid" id="packet-grid">
             {% for card in packet %}
-            <article class="packet-card{% if card.is_shiny %} shiny{% endif %}" data-packet-card>
+            <article class="packet-card{% if card.is_shiny %} shiny{% endif %}" data-packet-card data-sticker-trigger data-sticker-image="{{ card.image_url }}" data-sticker-name="{{ card.name }}" data-sticker-detail="{{ card.position }}{% if card.is_shiny %} · Shiny{% else %} · Base{% endif %}" tabindex="0" role="button" aria-label="Open {{ card.name }} sticker larger">
                 <div class="packet-image">
                     <div class="packet-rating">{{ card.overall }}</div>
                     <div class="packet-badge">{% if card.is_shiny %}Shiny{% else %}Base{% endif %}</div>
@@ -366,7 +442,7 @@
 
         <div class="packet-grid" id="packet-grid">
             {% for card in packet %}
-            <article class="packet-card{% if card.is_shiny %} shiny{% endif %}" data-packet-card>
+            <article class="packet-card{% if card.is_shiny %} shiny{% endif %}" data-packet-card data-sticker-trigger data-sticker-image="{{ card.image_url }}" data-sticker-name="{{ card.name }}" data-sticker-detail="{{ card.position }}{% if card.is_shiny %} · Shiny{% else %} · Base{% endif %}" tabindex="0" role="button" aria-label="Open {{ card.name }} sticker larger">
                 <div class="packet-image">
                     <div class="packet-rating">{{ card.overall }}</div>
                     <div class="packet-badge">{% if card.is_shiny %}Shiny{% else %}Base{% endif %}</div>
@@ -429,7 +505,7 @@
             {% if sticker_players %}
             <div class="album-grid">
                 {% for player in sticker_players %}
-                <article class="album-card">
+                <article class="album-card" data-sticker-trigger data-sticker-image="{{ player.image_url }}" data-sticker-name="{{ player.name }}" data-sticker-detail="{{ player.position }}" tabindex="0" role="button" aria-label="Open {{ player.name }} sticker larger">
                     <img src="{{ player.image_url }}" alt="{{ player.name }} pool photo">
                     <div class="album-card-body">
                         <h3>{{ player.name }}</h3>
@@ -449,7 +525,17 @@
     {% endif %}
 </div>
 
-{% if packet %}
+<div class="sticker-lightbox" id="sticker-lightbox" aria-hidden="true">
+    <button type="button" class="sticker-lightbox-close" id="sticker-lightbox-close" aria-label="Close sticker preview">×</button>
+    <div class="sticker-lightbox-panel" role="dialog" aria-modal="true" aria-labelledby="sticker-lightbox-title">
+        <img src="" alt="" class="sticker-lightbox-image" id="sticker-lightbox-image">
+        <div class="sticker-lightbox-body">
+            <h3 id="sticker-lightbox-title"></h3>
+            <p id="sticker-lightbox-detail"></p>
+        </div>
+    </div>
+</div>
+
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const cards = document.querySelectorAll('[data-packet-card]');
@@ -458,7 +544,78 @@
                 card.classList.add('is-visible');
             }, 180 * index + 120);
         });
+
+        const stickerTriggers = document.querySelectorAll('[data-sticker-trigger]');
+        const lightbox = document.getElementById('sticker-lightbox');
+        const lightboxImage = document.getElementById('sticker-lightbox-image');
+        const lightboxTitle = document.getElementById('sticker-lightbox-title');
+        const lightboxDetail = document.getElementById('sticker-lightbox-detail');
+        const lightboxClose = document.getElementById('sticker-lightbox-close');
+        let activeTrigger = null;
+
+        function openLightbox(trigger) {
+            if (!lightbox || !lightboxImage || !lightboxTitle || !lightboxDetail) {
+                return;
+            }
+
+            activeTrigger = trigger;
+            lightboxImage.src = trigger.dataset.stickerImage || '';
+            lightboxImage.alt = trigger.dataset.stickerName || 'Sticker preview';
+            lightboxTitle.textContent = trigger.dataset.stickerName || 'Sticker preview';
+            lightboxDetail.textContent = trigger.dataset.stickerDetail || '';
+            lightbox.classList.add('is-open');
+            lightbox.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            if (lightboxClose) {
+                lightboxClose.focus();
+            }
+        }
+
+        function closeLightbox() {
+            if (!lightbox) {
+                return;
+            }
+
+            lightbox.classList.remove('is-open');
+            lightbox.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+            lightboxImage.src = '';
+            if (activeTrigger) {
+                activeTrigger.focus();
+                activeTrigger = null;
+            }
+        }
+
+        stickerTriggers.forEach(function (trigger) {
+            trigger.addEventListener('click', function () {
+                openLightbox(trigger);
+            });
+
+            trigger.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openLightbox(trigger);
+                }
+            });
+        });
+
+        if (lightbox) {
+            lightbox.addEventListener('click', function (event) {
+                if (event.target === lightbox) {
+                    closeLightbox();
+                }
+            });
+        }
+
+        if (lightboxClose) {
+            lightboxClose.addEventListener('click', closeLightbox);
+        }
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && lightbox && lightbox.classList.contains('is-open')) {
+                closeLightbox();
+            }
+        });
     });
 </script>
-{% endif %}
 {% endblock %}
