@@ -244,6 +244,61 @@
 </style>
 
 <div class="sticker-shell">
+    {% if not is_admin %}
+    {% if success %}
+    <div class="alert alert-success">{{ success }}</div>
+    {% endif %}
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <div class="card" style="display: grid; place-items: center; min-height: 240px;">
+        <form method="POST" action="/stickers/open">
+            <button type="submit" class="btn btn-success" style="font-size: 1.15rem; padding: 14px 22px;">Open Packet</button>
+        </form>
+    </div>
+
+    {% if packet %}
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
+            <div>
+                <h2 style="margin-bottom: 4px;">Your Packet</h2>
+                <p style="color: #607284; margin: 0;">Cards flip in one by one after the pack opens.</p>
+            </div>
+            <form method="POST" action="/stickers/open">
+                <button type="submit" class="btn btn-success">Open Another Packet</button>
+            </form>
+        </div>
+
+        <div class="packet-grid" id="packet-grid">
+            {% for card in packet %}
+            <article class="packet-card{% if card.is_shiny %} shiny{% endif %}" data-packet-card>
+                <div class="packet-image">
+                    <div class="packet-rating">{{ card.overall }}</div>
+                    <div class="packet-badge">{% if card.is_shiny %}Shiny{% else %}Base{% endif %}</div>
+                    <img src="{{ card.image_url }}" alt="{{ card.name }} sticker photo">
+                </div>
+                <div class="packet-content">
+                    <h3>{{ card.name }}</h3>
+                    <div class="packet-position">{{ card.position }}</div>
+                    <div class="packet-headline">{{ card.headline }}</div>
+                    <div class="packet-stats">
+                        {% for stat in card.stats %}
+                        <div class="packet-stat">
+                            <strong>{{ stat.value }}</strong>
+                            <span>{{ stat.label }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% else %}
     <div class="card sticker-hero">
         <h1>Panini-Style Sticker Packets</h1>
         <p>Upload your own player photos, then tear open a six-sticker packet. Every packet includes one shiny and every card gets made-up football stats on the fly.</p>
@@ -356,6 +411,7 @@
             {% endif %}
         </div>
     </div>
+    {% endif %}
 </div>
 
 {% if packet %}

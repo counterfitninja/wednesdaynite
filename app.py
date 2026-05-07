@@ -1312,6 +1312,9 @@ def help_page():
 @app.route('/stickers', methods=['GET', 'POST'])
 def stickers():
     if request.method == 'POST':
+        if not session.get('logged_in'):
+            return redirect(url_for('stickers'))
+
         name = (request.form.get('name') or '').strip()
         position = (request.form.get('position') or '').strip()
         photo = request.files.get('photo')
