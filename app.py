@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, session, make_response, abort
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session, make_response
 import sqlite3
 from datetime import datetime, timedelta
 import os
@@ -1531,7 +1531,7 @@ def help_page():
 @app.route('/stickers', methods=['GET', 'POST'])
 def stickers():
     if not stickers_enabled():
-        abort(404)
+        return redirect(url_for('index'))
 
     if request.method == 'POST':
         if not session.get('logged_in'):
@@ -1576,7 +1576,7 @@ def stickers():
 @app.route('/stickers/open', methods=['POST'])
 def open_sticker_packet():
     if not stickers_enabled():
-        abort(404)
+        return redirect(url_for('index'))
 
     sticker_players = load_sticker_players()
     if len(sticker_players) < STICKER_PACKET_SIZE:
