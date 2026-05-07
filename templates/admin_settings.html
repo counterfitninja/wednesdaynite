@@ -60,6 +60,21 @@
                 </div>
             </label>
         </div>
+
+        <div style="margin-bottom: 20px;">
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 2px solid #e0e0e0;">
+                <input type="checkbox" name="stickers_enabled" {% if stickers_enabled %}checked{% endif %}
+                       style="width: 24px; height: 24px; cursor: pointer;">
+                <div>
+                    <strong style="display: block; font-size: 16px; margin-bottom: 5px;">
+                        Enable Stickers Feature
+                    </strong>
+                    <span style="color: #7f8c8d; font-size: 14px;">
+                        Show the Stickers page in navigation and allow access to sticker packets.
+                    </span>
+                </div>
+            </label>
+        </div>
         
         <button type="submit" class="btn btn-primary" style="width: 100%;">
             💾 Save Settings
@@ -95,11 +110,21 @@
 
 <div class="card">
     <h3>📊 Current Status</h3>
-    <div class="grid" style="grid-template-columns: 1fr 1fr;">
+    <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
         <div class="stat">
             <div class="stat-label">Notifications</div>
             <div class="stat-value" style="color: {% if notifications_enabled %}#27ae60{% else %}#e74c3c{% endif %};">
                 {% if notifications_enabled %}
+                ✅ Enabled
+                {% else %}
+                ❌ Disabled
+                {% endif %}
+            </div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">Stickers</div>
+            <div class="stat-value" style="color: {% if stickers_enabled %}#27ae60{% else %}#e74c3c{% endif %};">
+                {% if stickers_enabled %}
                 ✅ Enabled
                 {% else %}
                 ❌ Disabled

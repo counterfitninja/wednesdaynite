@@ -437,7 +437,9 @@
                 <a href="/leaderboard">🏆 Leaderboard</a>
                 <a href="/stats/rankings">📈 Rankings</a>
                 <a href="/stats/momentum">🚀 Momentum</a>
+                {% if stickers_enabled %}
                 <a href="/stickers">🟨 Stickers</a>
+                {% endif %}
                 <a href="/team-balancer">⚖️ Team Balancer</a>
                 <a href="/help">❓ Help</a>
                 {% if session.logged_in %}

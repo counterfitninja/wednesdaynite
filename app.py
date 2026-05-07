@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, session, make_response
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session, make_response, abort
 import sqlite3
 from datetime import datetime, timedelta
 import os
@@ -34,8 +34,10 @@ if not ADMIN_PASSWORD:
 @app.context_processor
 def inject_build_version():
     final_score_game_id = None
+    stickers_feature_enabled = True
     try:
         with get_db() as conn:
+            stickers_feature_enabled = get_bool_setting(conn, 'stickers_enabled', default=True)
             latest_pending = conn.execute('''
                 SELECT id FROM games
                 WHERE date <= date('now')
@@ -62,7 +64,8 @@ def inject_build_version():
     return {
         'build_version': BUILD_VERSION,
         'is_admin': session.get('logged_in', False),
-        'final_score_game_id': final_score_game_id
+        'final_score_game_id': final_score_game_id,
+        'stickers_enabled': stickers_feature_enabled
     }
 
 @app.route('/team-balancer')
@@ -119,6 +122,21 @@ def get_db():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def get_bool_setting(conn, key, default=False):
+    setting = conn.execute(
+        'SELECT value FROM settings WHERE key = ?',
+        (key,)
+    ).fetchone()
+    if not setting or setting['value'] is None:
+        return default
+    return str(setting['value']).strip().lower() == 'true'
+
+
+def stickers_enabled():
+    with get_db() as conn:
+        return get_bool_setting(conn, 'stickers_enabled', default=True)
 
 
 def build_momentum_table(conn, year, window_days=56, min_recent_games=2):
@@ -996,6 +1014,7 @@ def admin_settings():
     with get_db() as conn:
         if request.method == 'POST':
             notifications_enabled = request.form.get('notifications_enabled') == 'on'
+            stickers_feature_enabled = request.form.get('stickers_enabled') == 'on'
             weekly_payment_amount_raw = request.form.get('weekly_payment_amount', '').strip()
             rankings_face_size_raw = request.form.get('rankings_face_size', '').strip()
 
@@ -1018,6 +1037,10 @@ def admin_settings():
             ''', ('true' if notifications_enabled else 'false',))
             conn.execute('''
                 INSERT OR REPLACE INTO settings (key, value)
+                VALUES ('stickers_enabled', ?)
+            ''', ('true' if stickers_feature_enabled else 'false',))
+            conn.execute('''
+                INSERT OR REPLACE INTO settings (key, value)
                 VALUES ('weekly_payment_amount', ?)
             ''', (str(weekly_payment_amount),))
             conn.execute('''
@@ -1032,6 +1055,9 @@ def admin_settings():
         setting = conn.execute(
             "SELECT value FROM settings WHERE key = 'notifications_enabled'"
         ).fetchone()
+        stickers_setting = conn.execute(
+            "SELECT value FROM settings WHERE key = 'stickers_enabled'"
+        ).fetchone()
         payment_setting = conn.execute(
             "SELECT value FROM settings WHERE key = 'weekly_payment_amount'"
         ).fetchone()
@@ -1040,6 +1066,7 @@ def admin_settings():
         ).fetchone()
         
         notifications_enabled = setting['value'] == 'true' if setting else False
+        stickers_feature_enabled = stickers_setting['value'] == 'true' if stickers_setting else True
         try:
             weekly_payment_amount = float(payment_setting['value']) if payment_setting and payment_setting['value'] is not None else 0.0
         except (TypeError, ValueError):
@@ -1053,6 +1080,7 @@ def admin_settings():
     return render_template(
         'admin_settings.html',
         notifications_enabled=notifications_enabled,
+        stickers_enabled=stickers_feature_enabled,
         weekly_payment_amount=weekly_payment_amount,
         rankings_face_size=rankings_face_size
     )
@@ -1502,6 +1530,9 @@ def help_page():
 
 @app.route('/stickers', methods=['GET', 'POST'])
 def stickers():
+    if not stickers_enabled():
+        abort(404)
+
     if request.method == 'POST':
         if not session.get('logged_in'):
             return redirect(url_for('stickers'))
@@ -1544,6 +1575,9 @@ def stickers():
 
 @app.route('/stickers/open', methods=['POST'])
 def open_sticker_packet():
+    if not stickers_enabled():
+        abort(404)
+
     sticker_players = load_sticker_players()
     if len(sticker_players) < STICKER_PACKET_SIZE:
         return redirect(
