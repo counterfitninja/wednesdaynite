@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify, s
 import sqlite3
 from datetime import datetime, timedelta
 import os
+import random
 from functools import wraps
 import html
 from io import BytesIO
@@ -125,6 +126,17 @@ FACE_IMAGE_MAX_DIMENSION = 256
 FACE_IMAGE_WEBP_QUALITY = 82
 ALLOWED_CUSTOM_SHIELD_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'svg'}
 CUSTOM_SHIELD_MAX_BYTES = 4 * 1024 * 1024
+STICKER_IMAGE_MAX_DIMENSION = 1200
+STICKER_IMAGE_WEBP_QUALITY = 86
+STICKER_PACKET_SIZE = 6
+STICKER_STAT_FIELDS = (
+    ('PAC', 62, 99),
+    ('SHO', 58, 97),
+    ('PAS', 60, 98),
+    ('DRI', 61, 99),
+    ('DEF', 42, 96),
+    ('PHY', 55, 98),
+)
 
 
 def _face_storage_dir():
@@ -133,6 +145,10 @@ def _face_storage_dir():
 
 def _wall_asset_dir():
     return os.path.join(app.static_folder, 'wall_of_praise')
+
+
+def _sticker_storage_dir():
+    return os.path.join(app.static_folder, 'sticker_players')
 
 
 def get_custom_shield_file_path():
@@ -256,6 +272,99 @@ def save_player_face(player_id, upload_file):
 
     return True, 'Face image uploaded and optimized.'
 
+
+def get_sticker_image_url(sticker_id):
+    path = os.path.join(_sticker_storage_dir(), f'{sticker_id}.webp')
+    if os.path.exists(path):
+        return f'/static/sticker_players/{sticker_id}.webp'
+    return None
+
+
+def save_sticker_image(sticker_id, upload_file):
+    if not upload_file or upload_file.filename == '':
+        return False, 'Please choose a player photo.'
+
+    if not allowed_face_file(upload_file.filename):
+        return False, 'Invalid file type. Use png, jpg, jpeg, webp, or gif.'
+
+    os.makedirs(_sticker_storage_dir(), exist_ok=True)
+    save_path = os.path.join(_sticker_storage_dir(), f'{sticker_id}.webp')
+
+    try:
+        upload_file.stream.seek(0)
+        with Image.open(upload_file.stream) as img:
+            if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                processed = img.convert('RGBA')
+            else:
+                processed = img.convert('RGB')
+
+            processed.thumbnail((STICKER_IMAGE_MAX_DIMENSION, STICKER_IMAGE_MAX_DIMENSION), Image.Resampling.LANCZOS)
+            processed.save(save_path, format='WEBP', quality=STICKER_IMAGE_WEBP_QUALITY, method=6)
+    except UnidentifiedImageError:
+        return False, 'Invalid image file. Please upload a valid player photo.'
+    except Exception:
+        return False, 'Could not process player photo. Please try a different file.'
+
+    return True, 'Sticker player added.'
+
+
+def load_sticker_players():
+    with get_db() as conn:
+        rows = conn.execute('''
+            SELECT id, name, position
+            FROM sticker_players
+            ORDER BY name
+        ''').fetchall()
+
+    players = []
+    for row in rows:
+        image_url = get_sticker_image_url(row['id'])
+        if not image_url:
+            continue
+
+        players.append({
+            'id': row['id'],
+            'name': row['name'],
+            'position': row['position'] or 'Wildcard',
+            'image_url': image_url,
+        })
+
+    return players
+
+
+def build_sticker_card(player, is_shiny=False):
+    stats = []
+    stat_total = 0
+
+    for label, minimum, maximum in STICKER_STAT_FIELDS:
+        value = random.randint(minimum, maximum)
+        if is_shiny:
+            value = min(99, value + random.randint(2, 6))
+        stats.append({'label': label, 'value': value})
+        stat_total += value
+
+    overall = round(stat_total / len(STICKER_STAT_FIELDS))
+    if is_shiny:
+        overall = min(99, overall + 2)
+
+    return {
+        'id': player['id'],
+        'name': player['name'],
+        'position': player['position'],
+        'image_url': player['image_url'],
+        'overall': overall,
+        'is_shiny': is_shiny,
+        'headline': random.choice([
+            'Big match menace',
+            'Five-a-side machine',
+            'Midfield magnet',
+            'Box-to-box chaos',
+            'Cold-blooded finisher',
+            'Unexpected cult hero',
+        ]),
+        'stats': stats,
+    }
+
 def init_db():
     with get_db() as conn:
         conn.execute('''
@@ -320,6 +429,15 @@ def init_db():
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
+            )
+        ''')
+
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS sticker_players (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                position TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
@@ -1189,6 +1307,72 @@ def player_stats(player_id):
 @app.route('/help')
 def help_page():
     return render_template('help.html')
+
+
+@app.route('/stickers', methods=['GET', 'POST'])
+def stickers():
+    if request.method == 'POST':
+        name = (request.form.get('name') or '').strip()
+        position = (request.form.get('position') or '').strip()
+        photo = request.files.get('photo')
+
+        if not name:
+            return redirect(url_for('stickers', error='Give the sticker player a name before uploading.'))
+
+        with get_db() as conn:
+            try:
+                cursor = conn.execute(
+                    'INSERT INTO sticker_players (name, position) VALUES (?, ?)',
+                    (name, position or None)
+                )
+                sticker_id = cursor.lastrowid
+                ok, message = save_sticker_image(sticker_id, photo)
+                if not ok:
+                    conn.execute('DELETE FROM sticker_players WHERE id = ?', (sticker_id,))
+                    conn.commit()
+                    return redirect(url_for('stickers', error=message))
+
+                conn.commit()
+            except sqlite3.IntegrityError:
+                return redirect(url_for('stickers', error='That player name already exists in the sticker pool.'))
+
+        return redirect(url_for('stickers', success=f'{name} is ready for packets.'))
+
+    sticker_players = load_sticker_players()
+    return render_template(
+        'stickers.html',
+        sticker_players=sticker_players,
+        packet=None,
+        error=request.args.get('error'),
+        success=request.args.get('success')
+    )
+
+
+@app.route('/stickers/open', methods=['POST'])
+def open_sticker_packet():
+    sticker_players = load_sticker_players()
+    if len(sticker_players) < STICKER_PACKET_SIZE:
+        return redirect(
+            url_for(
+                'stickers',
+                error=f'Upload at least {STICKER_PACKET_SIZE} player photos before opening a packet.'
+            )
+        )
+
+    selected_players = random.sample(sticker_players, STICKER_PACKET_SIZE)
+    shiny_index = random.randrange(STICKER_PACKET_SIZE)
+    packet = [
+        build_sticker_card(player, is_shiny=index == shiny_index)
+        for index, player in enumerate(selected_players)
+    ]
+
+    return render_template(
+        'stickers.html',
+        sticker_players=sticker_players,
+        packet=packet,
+        error=None,
+        success=None
+    )
 
 
 @app.route('/wall-of-praise')

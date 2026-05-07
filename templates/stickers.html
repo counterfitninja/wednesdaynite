@@ -1,0 +1,373 @@
+{% extends "base.html" %}
+
+{% block title %}Sticker Packets - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<style>
+    .sticker-shell {
+        display: grid;
+        gap: 20px;
+    }
+
+    .sticker-hero {
+        background:
+            radial-gradient(circle at top left, rgba(255, 210, 73, 0.85), transparent 35%),
+            linear-gradient(135deg, #10324a 0%, #1a5f7a 48%, #f48c06 100%);
+        color: white;
+        overflow: hidden;
+        position: relative;
+    }
+
+    .sticker-hero::after {
+        content: '';
+        position: absolute;
+        inset: auto -40px -60px auto;
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.12);
+        filter: blur(4px);
+    }
+
+    .sticker-hero h1 {
+        font-size: 2.1rem;
+        margin-bottom: 8px;
+    }
+
+    .sticker-hero p {
+        max-width: 680px;
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    .sticker-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 18px;
+    }
+
+    .sticker-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.14);
+        backdrop-filter: blur(8px);
+        font-weight: 600;
+    }
+
+    .sticker-layout {
+        display: grid;
+        grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+        gap: 20px;
+    }
+
+    .upload-card {
+        align-self: start;
+    }
+
+    .album-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+        gap: 16px;
+    }
+
+    .album-card {
+        border: 1px solid #e6ebef;
+        border-radius: 18px;
+        overflow: hidden;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+        box-shadow: 0 10px 24px rgba(16, 50, 74, 0.08);
+    }
+
+    .album-card img {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        object-fit: cover;
+        display: block;
+        background: #dce8ef;
+    }
+
+    .album-card-body {
+        padding: 12px;
+    }
+
+    .album-card h3 {
+        font-size: 1rem;
+        margin-bottom: 4px;
+    }
+
+    .album-card p {
+        color: #607284;
+        font-size: 0.92rem;
+    }
+
+    .packet-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: 18px;
+        perspective: 1200px;
+    }
+
+    .packet-card {
+        position: relative;
+        min-height: 360px;
+        border-radius: 22px;
+        overflow: hidden;
+        color: white;
+        background: linear-gradient(180deg, #173f5f 0%, #0b2336 100%);
+        box-shadow: 0 18px 32px rgba(11, 35, 54, 0.28);
+        transform: translateY(24px) rotateX(8deg) scale(0.96);
+        opacity: 0;
+        transition: opacity 0.45s ease, transform 0.45s ease;
+    }
+
+    .packet-card.is-visible {
+        opacity: 1;
+        transform: translateY(0) rotateX(0) scale(1);
+    }
+
+    .packet-card.shiny {
+        background:
+            linear-gradient(135deg, rgba(255, 255, 255, 0.26), transparent 35%),
+            linear-gradient(160deg, #4f1271 0%, #124b8a 28%, #00a6a6 58%, #ffba08 100%);
+    }
+
+    .packet-card.shiny::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(
+            115deg,
+            rgba(255, 255, 255, 0.15) 0,
+            rgba(255, 255, 255, 0.15) 12px,
+            rgba(255, 255, 255, 0.02) 12px,
+            rgba(255, 255, 255, 0.02) 24px
+        );
+        pointer-events: none;
+    }
+
+    .packet-image {
+        position: relative;
+        padding: 14px 14px 0;
+    }
+
+    .packet-image img {
+        width: 100%;
+        aspect-ratio: 4 / 5;
+        object-fit: cover;
+        border-radius: 16px;
+        display: block;
+        border: 2px solid rgba(255, 255, 255, 0.18);
+    }
+
+    .packet-rating,
+    .packet-badge {
+        position: absolute;
+        top: 22px;
+        padding: 8px 10px;
+        border-radius: 14px;
+        background: rgba(7, 17, 26, 0.7);
+        backdrop-filter: blur(6px);
+        font-weight: 700;
+        z-index: 1;
+    }
+
+    .packet-rating {
+        left: 22px;
+        font-size: 1.3rem;
+    }
+
+    .packet-badge {
+        right: 22px;
+        font-size: 0.78rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .packet-content {
+        padding: 14px;
+        position: relative;
+        z-index: 1;
+    }
+
+    .packet-content h3 {
+        font-size: 1.1rem;
+        margin-bottom: 2px;
+    }
+
+    .packet-position,
+    .packet-headline {
+        color: rgba(255, 255, 255, 0.82);
+        font-size: 0.92rem;
+    }
+
+    .packet-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+    }
+
+    .packet-stat {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 8px;
+        text-align: center;
+    }
+
+    .packet-stat strong {
+        display: block;
+        font-size: 1rem;
+    }
+
+    .packet-stat span {
+        font-size: 0.75rem;
+        letter-spacing: 0.08em;
+        color: rgba(255, 255, 255, 0.75);
+    }
+
+    .empty-state {
+        border: 2px dashed #c8d5de;
+        border-radius: 16px;
+        padding: 24px;
+        text-align: center;
+        color: #607284;
+    }
+
+    @media (max-width: 880px) {
+        .sticker-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="sticker-shell">
+    <div class="card sticker-hero">
+        <h1>Panini-Style Sticker Packets</h1>
+        <p>Upload your own player photos, then tear open a six-sticker packet. Every packet includes one shiny and every card gets made-up football stats on the fly.</p>
+        <div class="sticker-meta">
+            <div class="sticker-pill">{{ sticker_players|length }} players in the pool</div>
+            <div class="sticker-pill">6 stickers per packet</div>
+            <div class="sticker-pill">1 shiny guaranteed</div>
+        </div>
+    </div>
+
+    {% if success %}
+    <div class="alert alert-success">{{ success }}</div>
+    {% endif %}
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    {% if packet %}
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
+            <div>
+                <h2 style="margin-bottom: 4px;">Your Packet</h2>
+                <p style="color: #607284; margin: 0;">Cards flip in one by one after the pack opens.</p>
+            </div>
+            <form method="POST" action="/stickers/open">
+                <button type="submit" class="btn btn-success">Open Another Packet</button>
+            </form>
+        </div>
+
+        <div class="packet-grid" id="packet-grid">
+            {% for card in packet %}
+            <article class="packet-card{% if card.is_shiny %} shiny{% endif %}" data-packet-card>
+                <div class="packet-image">
+                    <div class="packet-rating">{{ card.overall }}</div>
+                    <div class="packet-badge">{% if card.is_shiny %}Shiny{% else %}Base{% endif %}</div>
+                    <img src="{{ card.image_url }}" alt="{{ card.name }} sticker photo">
+                </div>
+                <div class="packet-content">
+                    <h3>{{ card.name }}</h3>
+                    <div class="packet-position">{{ card.position }}</div>
+                    <div class="packet-headline">{{ card.headline }}</div>
+                    <div class="packet-stats">
+                        {% for stat in card.stats %}
+                        <div class="packet-stat">
+                            <strong>{{ stat.value }}</strong>
+                            <span>{{ stat.label }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="sticker-layout">
+        <div class="card upload-card">
+            <h2 style="margin-bottom: 8px;">Add A Player Sticker</h2>
+            <p style="color: #607284; margin-bottom: 16px;">Upload square or portrait photos for the best result. Position is optional.</p>
+            <form method="POST" action="/stickers" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="name">Player Name</label>
+                    <input id="name" name="name" type="text" maxlength="80" required>
+                </div>
+                <div class="form-group">
+                    <label for="position">Position / Label</label>
+                    <input id="position" name="position" type="text" maxlength="40" placeholder="Striker, Keeper, Wildcard...">
+                </div>
+                <div class="form-group">
+                    <label for="photo">Photo</label>
+                    <input id="photo" name="photo" type="file" accept=".png,.jpg,.jpeg,.webp,.gif" required>
+                </div>
+                <button type="submit" class="btn btn-success btn-block">Add To Sticker Pool</button>
+            </form>
+            <hr style="margin: 20px 0; border: 0; border-top: 1px solid #e4eaef;">
+            <form method="POST" action="/stickers/open">
+                <button type="submit" class="btn btn-block" {% if sticker_players|length < 6 %}disabled style="opacity: 0.55; cursor: not-allowed;"{% endif %}>Tear Open A Packet</button>
+            </form>
+            <p style="margin-top: 12px; color: #607284; font-size: 0.92rem;">You need at least 6 uploaded players before the packet opener can run.</p>
+        </div>
+
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
+                <div>
+                    <h2 style="margin-bottom: 4px;">Sticker Album</h2>
+                    <p style="color: #607284; margin: 0;">This is the pool used to build each random packet.</p>
+                </div>
+                <span class="badge badge-success">{{ sticker_players|length }} uploaded</span>
+            </div>
+
+            {% if sticker_players %}
+            <div class="album-grid">
+                {% for player in sticker_players %}
+                <article class="album-card">
+                    <img src="{{ player.image_url }}" alt="{{ player.name }} pool photo">
+                    <div class="album-card-body">
+                        <h3>{{ player.name }}</h3>
+                        <p>{{ player.position }}</p>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <h3 style="margin-bottom: 8px; color: #173f5f;">No stickers yet</h3>
+                <p>Start by uploading six player photos so the first packet has a full set to draw from.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if packet %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const cards = document.querySelectorAll('[data-packet-card]');
+        cards.forEach(function (card, index) {
+            window.setTimeout(function () {
+                card.classList.add('is-visible');
+            }, 180 * index + 120);
+        });
+    });
+</script>
+{% endif %}
+{% endblock %}
