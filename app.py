@@ -533,6 +533,7 @@ def load_sticker_players():
 def build_sticker_card(player, is_shiny=False):
     stats = []
     stat_total = 0
+    display_name = (player.get('name') or '').strip().split()[0] if (player.get('name') or '').strip() else 'Player'
 
     for label, minimum, maximum in STICKER_STAT_FIELDS:
         value = random.randint(minimum, maximum)
@@ -547,7 +548,7 @@ def build_sticker_card(player, is_shiny=False):
 
     return {
         'id': player['id'],
-        'name': player['name'],
+        'name': display_name,
         'position': player['position'],
         'image_url': player['image_url'],
         'overall': overall,
