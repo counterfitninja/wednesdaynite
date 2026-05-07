@@ -25,5 +25,5 @@ Work through one per week. Mark completed items with ✅.
 16. **Lucky / Unlucky Rating** — Compare actual win rate vs expected win rate based on average teammate skill at time of each game.
 17. **Monthly Form Heatmap** — Calendar-style grid showing win/draw/loss for each game week. Good visual for spotting slumps and runs.
 18. **Biggest Upset Tracker** — Games where the lower-rated team (by combined skill) beat the higher-rated team. Show the biggest upsets of the year.
-19. **Season Momentum** — Win rate in the last 8 weeks vs the season average. Surfaced as a leaderboard card ("Hot right now").
+19. ✅ **Season Momentum** — Win rate in the last 8 weeks vs the season average. Surfaced as a leaderboard card ("Hot right now").
 20. **Partnership Depth Score** — Beyond best pair: rank players by how many strong synergy pairings they have (e.g. 3+ partners with >60% win rate together).

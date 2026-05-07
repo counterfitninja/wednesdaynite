@@ -121,6 +121,154 @@ def get_db():
     return conn
 
 
+def build_momentum_table(conn, year, window_days=56, min_recent_games=2):
+    games = conn.execute('''
+        SELECT id, date, team1_score, team2_score
+        FROM games
+        WHERE team1_score IS NOT NULL
+            AND team2_score IS NOT NULL
+            AND (is_abandoned IS NULL OR is_abandoned = 0)
+            AND strftime('%Y', date) = ?
+        ORDER BY date ASC
+    ''', (str(year),)).fetchall()
+
+    if not games:
+        return {
+            'table': [],
+            'lookup': {},
+            'latest_game_date': None,
+            'window_days': window_days,
+            'min_recent_games': min_recent_games
+        }
+
+    latest_game_date = datetime.strptime(games[-1]['date'], '%Y-%m-%d').date()
+    cutoff_date = latest_game_date - timedelta(days=window_days)
+
+    game_ids = [g['id'] for g in games]
+    placeholders = ','.join('?' * len(game_ids))
+    assignments = conn.execute(f'''
+        SELECT ta.game_id, ta.player_id, ta.team_number, p.name
+        FROM team_assignments ta
+        JOIN players p ON p.id = ta.player_id
+        WHERE ta.game_id IN ({placeholders})
+        ORDER BY ta.game_id, p.name
+    ''', game_ids).fetchall()
+
+    assignments_by_game = {}
+    player_names = {}
+    for row in assignments:
+        assignments_by_game.setdefault(row['game_id'], []).append(row)
+        player_names[row['player_id']] = row['name']
+
+    player_stats = {
+        pid: {
+            'season_games': 0,
+            'season_wins': 0,
+            'season_draws': 0,
+            'season_losses': 0,
+            'recent_games': 0,
+            'recent_wins': 0,
+            'recent_draws': 0,
+            'recent_losses': 0
+        }
+        for pid in player_names.keys()
+    }
+
+    for game in games:
+        game_date = datetime.strptime(game['date'], '%Y-%m-%d').date()
+        is_recent = game_date >= cutoff_date
+        gid = game['id']
+        t1 = game['team1_score']
+        t2 = game['team2_score']
+
+        for row in assignments_by_game.get(gid, []):
+            pid = row['player_id']
+            team_number = row['team_number']
+            stats = player_stats[pid]
+
+            stats['season_games'] += 1
+            if t1 == t2:
+                stats['season_draws'] += 1
+                result_key = 'draws'
+            elif (team_number == 1 and t1 > t2) or (team_number == 2 and t2 > t1):
+                stats['season_wins'] += 1
+                result_key = 'wins'
+            else:
+                stats['season_losses'] += 1
+                result_key = 'losses'
+
+            if is_recent:
+                stats['recent_games'] += 1
+                stats[f'recent_{result_key}'] += 1
+
+    momentum_table = []
+    momentum_lookup = {}
+
+    for pid, stats in player_stats.items():
+        season_games = stats['season_games']
+        recent_games = stats['recent_games']
+        if season_games <= 0:
+            continue
+
+        season_win_rate = round((stats['season_wins'] * 100.0 / season_games), 1)
+        recent_win_rate = round((stats['recent_wins'] * 100.0 / recent_games), 1) if recent_games > 0 else None
+        momentum_delta = round(recent_win_rate - season_win_rate, 1) if recent_win_rate is not None else None
+
+        if momentum_delta is None or recent_games < min_recent_games:
+            trend = 'insufficient'
+        elif momentum_delta >= 10:
+            trend = 'hot'
+        elif momentum_delta <= -10:
+            trend = 'cooling'
+        else:
+            trend = 'steady'
+
+        row = {
+            'player_id': pid,
+            'name': player_names.get(pid, ''),
+            'name_initial': format_name_with_initial(player_names.get(pid, '')),
+            'season_games': season_games,
+            'season_wins': stats['season_wins'],
+            'season_draws': stats['season_draws'],
+            'season_losses': stats['season_losses'],
+            'season_win_rate': season_win_rate,
+            'recent_games': recent_games,
+            'recent_wins': stats['recent_wins'],
+            'recent_draws': stats['recent_draws'],
+            'recent_losses': stats['recent_losses'],
+            'recent_win_rate': recent_win_rate,
+            'momentum_delta': momentum_delta,
+            'trend': trend
+        }
+
+        momentum_table.append(row)
+        momentum_lookup[pid] = {
+            'trend': trend,
+            'momentum_delta': momentum_delta,
+            'recent_games': recent_games,
+            'recent_win_rate': recent_win_rate,
+            'season_win_rate': season_win_rate
+        }
+
+    momentum_table.sort(
+        key=lambda row: (
+            row['momentum_delta'] is None,
+            -(row['momentum_delta'] if row['momentum_delta'] is not None else -999),
+            -row['recent_games'],
+            -row['season_games'],
+            row['name'].lower()
+        )
+    )
+
+    return {
+        'table': momentum_table,
+        'lookup': momentum_lookup,
+        'latest_game_date': latest_game_date,
+        'window_days': window_days,
+        'min_recent_games': min_recent_games
+    }
+
+
 ALLOWED_FACE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif'}
 FACE_IMAGE_MAX_DIMENSION = 256
 FACE_IMAGE_WEBP_QUALITY = 82
@@ -955,6 +1103,8 @@ def leaderboard():
     current_year = datetime.now().year
     best_active_streak = None
     best_synergy_pair = None
+    momentum_lookup = {}
+    top_hot_player = None
     color_win_totals = {'pink_wins': 0, 'yellow_wins': 0, 'draws': 0}
     color_player_leaders = []
     top_pink_winner = None
@@ -1125,6 +1275,13 @@ def leaderboard():
                 key=lambda row: (-row['yellow_wins'], -row['total_wins'], row['name'].lower())
             )[0]
 
+        momentum_payload = build_momentum_table(conn, current_year)
+        momentum_lookup = momentum_payload['lookup']
+        momentum_table = momentum_payload['table']
+        hot_players = [row for row in momentum_table if row['trend'] == 'hot']
+        if hot_players:
+            top_hot_player = hot_players[0]
+
         # Attendance leaderboard for current year.
         # Denominator is all non-abandoned games in the year.
         # Explicitly filter out abandoned games to ensure they're never included.
@@ -1289,6 +1446,8 @@ def leaderboard():
                          year=current_year,
                          best_active_streak=best_active_streak,
                          best_synergy_pair=best_synergy_pair,
+                         momentum_lookup=momentum_lookup,
+                         top_hot_player=top_hot_player,
                          color_win_totals=color_win_totals,
                          color_player_leaders=color_player_leaders,
                          top_pink_winner=top_pink_winner,
@@ -3167,6 +3326,33 @@ def color_stats():
         color_player_leaders=color_player_leaders,
         top_pink_winner=top_pink_winner,
         top_yellow_winner=top_yellow_winner
+    )
+
+
+@app.route('/stats/momentum')
+def stats_momentum():
+    current_year = datetime.now().year
+
+    with get_db() as conn:
+        payload = build_momentum_table(conn, current_year)
+
+    table_rows = payload['table']
+    eligible_rows = [row for row in table_rows if row['momentum_delta'] is not None]
+    hot_rows = [row for row in eligible_rows if row['momentum_delta'] > 0][:5]
+    cooling_rows = sorted(
+        [row for row in eligible_rows if row['momentum_delta'] < 0],
+        key=lambda row: (row['momentum_delta'], row['name'].lower())
+    )[:5]
+
+    return render_template(
+        'stats_momentum.html',
+        year=current_year,
+        table_rows=table_rows,
+        hot_rows=hot_rows,
+        cooling_rows=cooling_rows,
+        latest_game_date=payload['latest_game_date'],
+        window_days=payload['window_days'],
+        min_recent_games=payload['min_recent_games']
     )
 
 

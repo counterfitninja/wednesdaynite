@@ -35,6 +35,7 @@
     <a href="/stats/synergy" class="btn" style="background: #16a085;">🤝 Synergy Matrix</a>
     <a href="/stats/rivals" class="btn" style="background: #c0392b;">⚔️ Rival Matrix</a>
     <a href="/stats/rankings" class="btn" style="background: #8e44ad;">📈 Rankings Timeline</a>
+    <a href="/stats/momentum" class="btn" style="background: #d35400;">🚀 Season Momentum</a>
 </div>
 
 <script>
@@ -244,6 +245,18 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="stat-label">Top Synergy Pair</div>
             {% endif %}
         </div>
+        <div class="stat">
+            {% if top_hot_player %}
+            <div class="stat-value" style="color: #d35400;">{{ "+%.1f"|format(top_hot_player.momentum_delta) }}</div>
+            <div class="stat-label">
+                Hottest Right Now<br>
+                <a href="/stats/momentum" style="color: #d35400; text-decoration: none; font-weight: 600;">{{ top_hot_player.name_initial }}</a>
+            </div>
+            {% else %}
+            <div class="stat-value" style="color: #d35400;">—</div>
+            <div class="stat-label">Hottest Right Now</div>
+            {% endif %}
+        </div>
     </div>
 </div>
 
@@ -265,6 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </thead>
         <tbody id="wins-tbody">
             {% for player in leaderboard %}
+            {% set momentum = momentum_lookup.get(player.id) if momentum_lookup else None %}
             <tr data-name="{{ player.name|name_initial }}" data-wins="{{ player.wins }}" data-draws="{{ player.draws }}" data-losses="{{ player.losses }}" data-total_games="{{ player.total_games }}" data-win_percentage="{{ player.win_percentage }}" data-loss_percentage="{{ player.loss_percentage }}" data-non_loss_percentage="{{ player.non_loss_percentage }}">
                 <td style="text-align: center;">
                     {% if loop.index == 1 %}
@@ -277,7 +291,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     <strong>#{{ loop.index }}</strong>
                     {% endif %}
                 </td>
-                <td><a href="/players/{{ player.id }}/stats" style="color: #2c3e50; text-decoration: none;"><strong>{{ player.name|name_initial }}</strong></a></td>
+                <td>
+                    <a href="/players/{{ player.id }}/stats" style="color: #2c3e50; text-decoration: none;"><strong>{{ player.name|name_initial }}</strong></a>
+                    {% if momentum and momentum.trend == 'hot' %}
+                    <span class="badge" style="background: #d35400; margin-left: 6px;">🔥 Hot</span>
+                    {% endif %}
+                </td>
                 <td style="text-align: center;">
                     <span class="badge badge-success">{{ player.wins }}</span>
                 </td>

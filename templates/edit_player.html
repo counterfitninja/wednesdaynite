@@ -18,9 +18,14 @@
         <div style="width: 76px; height: 76px; border-radius: 50%; border: 3px dashed #bdc3c7; display: inline-flex; align-items: center; justify-content: center; color: #95a5a6; font-size: 0.85em;">No face</div>
         {% endif %}
 
-        <form action="/players/{{ player.id }}/face" method="POST" enctype="multipart/form-data" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-            <input type="file" name="face_image" accept="image/png,image/jpeg,image/webp,image/gif" required>
+        <form id="face-upload-form" action="/players/{{ player.id }}/face" method="POST" enctype="multipart/form-data" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <input id="face-image-input" type="file" name="face_image" accept="image/png,image/jpeg,image/webp,image/gif" required>
             <button type="submit" class="btn">Upload Face</button>
+            <div id="clipboard-face-target" tabindex="0" style="padding: 8px 10px; border: 2px dashed #95a5a6; border-radius: 6px; color: #2c3e50; background: #f8f9fa; cursor: pointer; min-width: 220px;">
+                Click here, then press Ctrl+V to paste an image
+            </div>
+            <small id="clipboard-face-status" style="display: block; width: 100%; color: #7f8c8d;">Clipboard image paste is supported on this page.</small>
+            <img id="clipboard-face-preview" alt="Pasted face preview" style="display: none; width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid #2c3e50;">
         </form>
     </div>
 </div>
@@ -65,4 +70,95 @@
         <a href="/players" class="btn">Cancel</a>
     </form>
 </div>
+
+<script>
+    (function () {
+        const fileInput = document.getElementById('face-image-input');
+        const pasteTarget = document.getElementById('clipboard-face-target');
+        const status = document.getElementById('clipboard-face-status');
+        const preview = document.getElementById('clipboard-face-preview');
+
+        if (!fileInput || !pasteTarget || !status || !preview) {
+            return;
+        }
+
+        function setStatus(message, color) {
+            status.textContent = message;
+            status.style.color = color || '#7f8c8d';
+        }
+
+        function applyPastedFile(file) {
+            if (!file || !file.type || !file.type.startsWith('image/')) {
+                setStatus('Clipboard does not contain an image.', '#c0392b');
+                return;
+            }
+
+            if (typeof DataTransfer === 'undefined') {
+                setStatus('Your browser cannot auto-attach pasted files. Please use Choose File.', '#c0392b');
+                return;
+            }
+
+            const transfer = new DataTransfer();
+            transfer.items.add(file);
+            fileInput.files = transfer.files;
+
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                preview.src = event.target && event.target.result ? event.target.result : '';
+                preview.style.display = preview.src ? 'inline-block' : 'none';
+            };
+            reader.readAsDataURL(file);
+
+            setStatus('Clipboard image attached. Click Upload Face to save it.', '#1e8449');
+            pasteTarget.style.borderColor = '#1e8449';
+            pasteTarget.style.background = '#ecfdf3';
+        }
+
+        function findImageInClipboard(event) {
+            const clipboard = event.clipboardData;
+            if (!clipboard || !clipboard.items) {
+                return null;
+            }
+
+            for (let i = 0; i < clipboard.items.length; i += 1) {
+                const item = clipboard.items[i];
+                if (item.kind === 'file') {
+                    const file = item.getAsFile();
+                    if (file && file.type && file.type.startsWith('image/')) {
+                        return file;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        function isTextEntryElement(element) {
+            if (!element) {
+                return false;
+            }
+            const tag = element.tagName;
+            return tag === 'INPUT' || tag === 'TEXTAREA' || element.isContentEditable;
+        }
+
+        pasteTarget.addEventListener('click', function () {
+            pasteTarget.focus();
+        });
+
+        document.addEventListener('paste', function (event) {
+            const activeElement = document.activeElement;
+            if (isTextEntryElement(activeElement) && activeElement !== pasteTarget) {
+                return;
+            }
+
+            const image = findImageInClipboard(event);
+            if (!image) {
+                return;
+            }
+
+            event.preventDefault();
+            applyPastedFile(image);
+        });
+    })();
+</script>
 {% endblock %}
