@@ -5,6 +5,7 @@
 {% block content %}
 <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
     <a href="/leaderboard" class="btn">← Back to Leaderboard</a>
+    <a href="/stats/h2h?a={{ player.id }}" class="btn" style="background: #2e86c1;">🆚 Open H2H</a>
 </div>
 
 {% set wins = games | selectattr('result', 'equalto', 'win') | list | length %}
@@ -15,6 +16,18 @@
 <div class="card">
     <h1>{{ player.name|name_initial }}</h1>
     <p style="color: #7f8c8d;">Game results for {{ year }}</p>
+    {% if h2h_targets %}
+    <form id="h2h-quick-form" method="get" action="/stats/h2h" style="margin-top: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <input type="hidden" name="a" value="{{ player.id }}">
+        <label for="h2h-opponent" style="font-weight: 600; color: #2c3e50;">Quick compare with:</label>
+        <select id="h2h-opponent" name="b" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #d0d7de; min-width: 200px;">
+            {% for target in h2h_targets %}
+            <option value="{{ target.id }}">{{ target.name }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="btn" style="background: #2e86c1;">Compare</button>
+    </form>
+    {% endif %}
     <div style="display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap;">
         <span class="badge badge-success" style="font-size: 1.1em; padding: 8px 14px;">{{ wins }} W</span>
         <span class="badge" style="background:#95a5a6; font-size: 1.1em; padding: 8px 14px;">{{ draws }} D</span>

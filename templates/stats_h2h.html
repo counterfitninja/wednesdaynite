@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}Head-to-Head Comparison - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+    <a href="/leaderboard" class="btn" style="background: #27ae60;">🏆 Wins</a>
+    <a href="/leaderboard?tab=attendance" class="btn" style="background: #3498db;">📊 Attendance</a>
+    <a href="/stats/colors" class="btn" style="background: #e91e63;">🎨 Wins By Colour</a>
+    <a href="/stats/streaks" class="btn" style="background: #e67e22;">🔥 Streak Timeline</a>
+    <a href="/stats/synergy" class="btn" style="background: #16a085;">🤝 Synergy Matrix</a>
+    <a href="/stats/rivals" class="btn" style="background: #c0392b;">⚔️ Rival Matrix</a>
+    <a href="/stats/h2h" class="btn" style="background: #2e86c1; box-shadow: inset 0 0 0 2px #1f2d3a;">🆚 Head-to-Head</a>
+    <a href="/stats/rankings" class="btn" style="background: #8e44ad;">📈 Rankings Timeline</a>
+    <a href="/stats/momentum" class="btn" style="background: #d35400;">🚀 Season Momentum</a>
+</div>
+
+<div class="card">
+    <h1>🆚 Head-to-Head Comparison {{ year }}</h1>
+    <p style="color: #7f8c8d; margin-top: 6px;">
+        Compare two players when they are teammates and when they play against each other.
+    </p>
+
+    <form method="get" action="{{ url_for('head_to_head_stats') }}" style="margin-top: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <label for="player_a" style="font-weight: 600; color: #2c3e50;">Player A:</label>
+        <select id="player_a" name="a" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #d0d7de; min-width: 180px;">
+            {% for p in players %}
+            <option value="{{ p.id }}" {% if selected_a == p.id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="player_b" style="font-weight: 600; color: #2c3e50;">Player B:</label>
+        <select id="player_b" name="b" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #d0d7de; min-width: 180px;">
+            {% for p in players %}
+            <option value="{{ p.id }}" {% if selected_b == p.id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+        </select>
+
+        <button type="submit" class="btn">Compare</button>
+    </form>
+</div>
+
+{% if not players %}
+<div class="card">
+    <p style="text-align: center; color: #7f8c8d; padding: 20px;">No players available yet.</p>
+</div>
+{% elif not comparison_ready %}
+<div class="card">
+    <p style="text-align: center; color: #7f8c8d; padding: 20px;">Choose two different players to compare.</p>
+</div>
+{% else %}
+<div class="card" style="display: flex; gap: 10px; flex-wrap: wrap;">
+    <span class="badge" style="background: #2e86c1;">{{ player_a.name|name_initial }} vs {{ player_b.name|name_initial }}</span>
+    <span class="badge" style="background: #7f8c8d;">Meetings: {{ meetings|length }}</span>
+</div>
+
+<div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+    <div class="card">
+        <h2 style="margin-bottom: 10px;">Together (Same Team)</h2>
+        <p style="color: #7f8c8d; margin-bottom: 12px;">From {{ player_a.name|name_initial }}'s games when both are on the same side.</p>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px;">
+            <span class="badge" style="background: #34495e;">Games: {{ together_stats.games }}</span>
+            <span class="badge" style="background: #27ae60;">{{ together_stats.wins }}W</span>
+            <span class="badge" style="background: #7f8c8d;">{{ together_stats.draws }}D</span>
+            <span class="badge" style="background: #c0392b;">{{ together_stats.losses }}L</span>
+        </div>
+        <p><strong>Win rate:</strong> {{ together_stats.win_rate }}%</p>
+    </div>
+
+    <div class="card">
+        <h2 style="margin-bottom: 10px;">Against Each Other</h2>
+        <p style="color: #7f8c8d; margin-bottom: 12px;">Results for {{ player_a.name|name_initial }} against {{ player_b.name|name_initial }}.</p>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 8px;">
+            <span class="badge" style="background: #34495e;">Games: {{ versus_stats.games }}</span>
+            <span class="badge" style="background: #27ae60;">{{ versus_stats.wins }}W</span>
+            <span class="badge" style="background: #7f8c8d;">{{ versus_stats.draws }}D</span>
+            <span class="badge" style="background: #c0392b;">{{ versus_stats.losses }}L</span>
+        </div>
+        <p><strong>Win rate:</strong> {{ versus_stats.win_rate }}%</p>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Recent Shared Games</h2>
+    {% if meetings %}
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 60px;">Rank</th>
+                <th>Date</th>
+                <th style="text-align: center;">Type</th>
+                <th style="text-align: center;">Game Score</th>
+                <th style="text-align: center;">{{ player_a.name|name_initial }} vs {{ player_b.name|name_initial }}</th>
+                <th style="text-align: center;">{{ player_a.name|name_initial }} Result</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in meetings %}
+            <tr>
+                <td style="text-align: center;"><strong>#{{ loop.index }}</strong></td>
+                <td>{{ row.date|ukdate }}</td>
+                <td style="text-align: center;">
+                    {% if row.same_team %}
+                    <span class="badge" style="background: #16a085;">{{ row.matchup_label }}</span>
+                    {% else %}
+                    <span class="badge" style="background: #8e44ad;">{{ row.matchup_label }}</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: center;">{{ row.team_score_label }}</td>
+                <td style="text-align: center;">{{ row.a_vs_b_label }}</td>
+                <td style="text-align: center;">
+                    {% if row.result_label == 'Win' %}
+                    <span class="badge" style="background: #27ae60;">{{ row.result_label }}</span>
+                    {% elif row.result_label == 'Draw' %}
+                    <span class="badge" style="background: #7f8c8d;">{{ row.result_label }}</span>
+                    {% else %}
+                    <span class="badge" style="background: #c0392b;">{{ row.result_label }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="text-align: center; color: #7f8c8d; padding: 20px;">No shared scored games found for these two players in {{ year }}.</p>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

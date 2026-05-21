@@ -178,186 +178,6 @@ def balance_score_stats():
     )
 
 
-@app.route('/stats/margins')
-def score_margins_stats():
-    current_year = datetime.now().year
-
-    with get_db() as conn:
-        games = conn.execute('''
-            SELECT id, date, team1_score, team2_score
-            FROM games
-            WHERE team1_score IS NOT NULL
-                AND team2_score IS NOT NULL
-                AND (is_abandoned IS NULL OR is_abandoned = 0)
-                AND strftime('%Y', date) = ?
-            ORDER BY date DESC
-        ''', (str(current_year),)).fetchall()
-
-        if not games:
-            return render_template(
-                'stats_margins.html',
-                year=current_year,
-                total_games=0,
-                average_margin=0.0,
-                draw_games_count=0,
-                close_games_count=0,
-                blowout_games_count=0,
-                closest_games=[],
-                biggest_wins=[],
-                clinical_players=[],
-                blowout_players=[],
-                top_clutch_player=None
-            )
-
-        margin_rows = []
-        for game in games:
-            team1_score = game['team1_score']
-            team2_score = game['team2_score']
-            margin = abs(team1_score - team2_score)
-            total_goals = team1_score + team2_score
-
-            if team1_score == team2_score:
-                winner_label = 'Draw'
-            elif team1_score > team2_score:
-                winner_label = 'Pink Team'
-            else:
-                winner_label = 'Yellow Team'
-
-            margin_rows.append({
-                'game_id': game['id'],
-                'date': game['date'],
-                'team1_score': team1_score,
-                'team2_score': team2_score,
-                'margin': margin,
-                'total_goals': total_goals,
-                'winner_label': winner_label
-            })
-
-        total_games = len(margin_rows)
-        average_margin = round(sum(row['margin'] for row in margin_rows) / total_games, 2) if total_games else 0.0
-        draw_games_count = sum(1 for row in margin_rows if row['margin'] == 0)
-        close_games_count = sum(1 for row in margin_rows if row['margin'] == 1)
-        blowout_games_count = sum(1 for row in margin_rows if row['margin'] >= 3)
-
-        closest_games = sorted(
-            margin_rows,
-            key=lambda row: (row['margin'], -row['total_goals'], row['date'])
-        )[:10]
-
-        biggest_wins = sorted(
-            margin_rows,
-            key=lambda row: (-row['margin'], -row['total_goals'], row['date'])
-        )[:10]
-
-        clinical_rows = conn.execute('''
-            SELECT
-                p.id,
-                p.name,
-                COUNT(*) as close_games,
-                SUM(CASE
-                    WHEN (ta.team_number = 1 AND g.team1_score > g.team2_score) OR
-                         (ta.team_number = 2 AND g.team2_score > g.team1_score)
-                    THEN 1 ELSE 0
-                END) as close_wins,
-                SUM(CASE
-                    WHEN g.team1_score = g.team2_score
-                    THEN 1 ELSE 0
-                END) as close_draws
-            FROM players p
-            JOIN team_assignments ta ON p.id = ta.player_id
-            JOIN games g ON ta.game_id = g.id
-            WHERE g.team1_score IS NOT NULL
-                AND g.team2_score IS NOT NULL
-                AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
-                AND strftime('%Y', g.date) = ?
-                AND ABS(g.team1_score - g.team2_score) = 1
-            GROUP BY p.id, p.name
-            HAVING close_games >= 2
-            ORDER BY
-                CAST(close_wins AS REAL) / close_games DESC,
-                close_games DESC,
-                p.name ASC
-        ''', (str(current_year),)).fetchall()
-
-        clinical_players = []
-        for row in clinical_rows:
-            close_games = row['close_games'] or 0
-            close_wins = row['close_wins'] or 0
-            close_draws = row['close_draws'] or 0
-            close_losses = max(0, close_games - close_wins - close_draws)
-            close_win_rate = round((close_wins * 100.0 / close_games), 1) if close_games > 0 else 0.0
-
-            clinical_players.append({
-                'id': row['id'],
-                'name': row['name'],
-                'name_initial': format_name_with_initial(row['name']),
-                'close_games': close_games,
-                'close_wins': close_wins,
-                'close_draws': close_draws,
-                'close_losses': close_losses,
-                'close_win_rate': close_win_rate
-            })
-
-        blowout_rows = conn.execute('''
-            SELECT
-                p.id,
-                p.name,
-                COUNT(*) as blowout_games,
-                SUM(CASE
-                    WHEN (ta.team_number = 1 AND g.team1_score > g.team2_score) OR
-                         (ta.team_number = 2 AND g.team2_score > g.team1_score)
-                    THEN 1 ELSE 0
-                END) as blowout_wins
-            FROM players p
-            JOIN team_assignments ta ON p.id = ta.player_id
-            JOIN games g ON ta.game_id = g.id
-            WHERE g.team1_score IS NOT NULL
-                AND g.team2_score IS NOT NULL
-                AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
-                AND strftime('%Y', g.date) = ?
-                AND ABS(g.team1_score - g.team2_score) >= 3
-            GROUP BY p.id, p.name
-            HAVING blowout_games >= 2
-            ORDER BY
-                blowout_games DESC,
-                CAST(blowout_wins AS REAL) / blowout_games DESC,
-                p.name ASC
-        ''', (str(current_year),)).fetchall()
-
-        blowout_players = []
-        for row in blowout_rows:
-            blowout_games = row['blowout_games'] or 0
-            blowout_wins = row['blowout_wins'] or 0
-            blowout_losses = max(0, blowout_games - blowout_wins)
-            blowout_win_rate = round((blowout_wins * 100.0 / blowout_games), 1) if blowout_games > 0 else 0.0
-
-            blowout_players.append({
-                'id': row['id'],
-                'name': row['name'],
-                'name_initial': format_name_with_initial(row['name']),
-                'blowout_games': blowout_games,
-                'blowout_wins': blowout_wins,
-                'blowout_losses': blowout_losses,
-                'blowout_win_rate': blowout_win_rate
-            })
-
-    top_clutch_player = clinical_players[0] if clinical_players else None
-
-    return render_template(
-        'stats_margins.html',
-        year=current_year,
-        total_games=total_games,
-        average_margin=average_margin,
-        draw_games_count=draw_games_count,
-        close_games_count=close_games_count,
-        blowout_games_count=blowout_games_count,
-        closest_games=closest_games,
-        biggest_wins=biggest_wins,
-        clinical_players=clinical_players,
-        blowout_players=blowout_players,
-        top_clutch_player=top_clutch_player
-    )
-
 # Simple health/version endpoints for smoke testing
 @app.route('/healthz')
 @app.route('/status')
@@ -1867,6 +1687,13 @@ def player_stats(player_id):
         if not player:
             return "Player not found", 404
 
+        h2h_targets = conn.execute('''
+            SELECT id, name
+            FROM players
+            WHERE id != ?
+            ORDER BY name ASC
+        ''', (player_id,)).fetchall()
+
         games = conn.execute('''
             SELECT
                 g.id,
@@ -1896,7 +1723,8 @@ def player_stats(player_id):
     return render_template('player_stats.html',
                            player=player,
                            games=games,
-                           year=current_year)
+                           year=current_year,
+                           h2h_targets=h2h_targets)
 
 @app.route('/help')
 def help_page():
@@ -3735,6 +3563,134 @@ def color_stats():
         color_player_leaders=color_player_leaders,
         top_pink_winner=top_pink_winner,
         top_yellow_winner=top_yellow_winner
+    )
+
+
+@app.route('/stats/h2h')
+def head_to_head_stats():
+    current_year = datetime.now().year
+    selected_a = request.args.get('a', type=int)
+    selected_b = request.args.get('b', type=int)
+
+    with get_db() as conn:
+        players = conn.execute(
+            'SELECT id, name FROM players ORDER BY name ASC'
+        ).fetchall()
+
+    players_list = [{'id': row['id'], 'name': row['name']} for row in players]
+    player_ids = [row['id'] for row in players]
+
+    if not players_list:
+        return render_template(
+            'stats_h2h.html',
+            year=current_year,
+            players=[],
+            selected_a=None,
+            selected_b=None,
+            player_a=None,
+            player_b=None,
+            comparison_ready=False,
+            together_stats=None,
+            versus_stats=None,
+            meetings=[]
+        )
+
+    if selected_a not in player_ids:
+        selected_a = player_ids[0]
+
+    if selected_b not in player_ids:
+        if len(player_ids) > 1:
+            selected_b = player_ids[1] if player_ids[1] != selected_a else player_ids[0]
+        else:
+            selected_b = player_ids[0]
+
+    player_lookup = {row['id']: row['name'] for row in players_list}
+    player_a = {'id': selected_a, 'name': player_lookup.get(selected_a, '')}
+    player_b = {'id': selected_b, 'name': player_lookup.get(selected_b, '')}
+
+    comparison_ready = selected_a is not None and selected_b is not None and selected_a != selected_b
+    together_stats = None
+    versus_stats = None
+    meetings = []
+
+    if comparison_ready:
+        with get_db() as conn:
+            rows = conn.execute('''
+                SELECT
+                    g.id,
+                    g.date,
+                    g.team1_score,
+                    g.team2_score,
+                    ta1.team_number as team_a,
+                    ta2.team_number as team_b
+                FROM games g
+                JOIN team_assignments ta1 ON ta1.game_id = g.id AND ta1.player_id = ?
+                JOIN team_assignments ta2 ON ta2.game_id = g.id AND ta2.player_id = ?
+                WHERE g.team1_score IS NOT NULL
+                    AND g.team2_score IS NOT NULL
+                    AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+                    AND strftime('%Y', g.date) = ?
+                ORDER BY g.date DESC, g.id DESC
+            ''', (selected_a, selected_b, str(current_year))).fetchall()
+
+        together = {'games': 0, 'wins': 0, 'draws': 0, 'losses': 0}
+        versus = {'games': 0, 'wins': 0, 'draws': 0, 'losses': 0}
+
+        for row in rows:
+            team1_score = row['team1_score']
+            team2_score = row['team2_score']
+
+            a_score = team1_score if row['team_a'] == 1 else team2_score
+            b_score = team1_score if row['team_b'] == 1 else team2_score
+
+            if a_score > b_score:
+                a_result = 'win'
+            elif a_score < b_score:
+                a_result = 'loss'
+            else:
+                a_result = 'draw'
+
+            same_team = row['team_a'] == row['team_b']
+            target = together if same_team else versus
+            target['games'] += 1
+            if a_result == 'win':
+                target['wins'] += 1
+            elif a_result == 'draw':
+                target['draws'] += 1
+            else:
+                target['losses'] += 1
+
+            meetings.append({
+                'game_id': row['id'],
+                'date': row['date'],
+                'same_team': same_team,
+                'matchup_label': 'Same team' if same_team else 'Opponents',
+                'team_score_label': f"{team1_score} - {team2_score}",
+                'a_vs_b_label': f"{a_score} - {b_score}",
+                'result_label': 'Win' if a_result == 'win' else ('Draw' if a_result == 'draw' else 'Loss')
+            })
+
+        together_stats = {
+            **together,
+            'win_rate': round((together['wins'] * 100.0 / together['games']), 1) if together['games'] > 0 else 0.0
+        }
+        versus_stats = {
+            **versus,
+            'win_rate': round((versus['wins'] * 100.0 / versus['games']), 1) if versus['games'] > 0 else 0.0
+        }
+
+    return render_template(
+        'stats_h2h.html',
+        year=current_year,
+        players=players_list,
+        selected_a=selected_a,
+        selected_b=selected_b,
+        player_a=player_a,
+        player_b=player_b,
+        comparison_ready=comparison_ready,
+        together_stats=together_stats,
+        versus_stats=versus_stats,
+        meetings=meetings
     )
 
 
