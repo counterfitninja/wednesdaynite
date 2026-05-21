@@ -72,6 +72,111 @@ def inject_build_version():
 def team_balancer():
     return render_template('team_balancer.html')
 
+
+@app.route('/stats/balance')
+def balance_score_stats():
+    current_year = datetime.now().year
+
+    with get_db() as conn:
+        games = conn.execute('''
+            SELECT id, date, team1_score, team2_score
+            FROM games
+            WHERE team1_score IS NOT NULL
+                AND team2_score IS NOT NULL
+                AND (is_abandoned IS NULL OR is_abandoned = 0)
+                AND strftime('%Y', date) = ?
+            ORDER BY date ASC
+        ''', (str(current_year),)).fetchall()
+
+        if not games:
+            return render_template(
+                'stats_balance.html',
+                year=current_year,
+                average_balance_score=0.0,
+                balanced_game_count=0,
+                total_games=0,
+                best_balanced_games=[],
+                worst_balanced_games=[]
+            )
+
+        game_ids = [game['id'] for game in games]
+        placeholders = ','.join('?' * len(game_ids))
+        assignments = conn.execute(f'''
+            SELECT
+                ta.game_id,
+                ta.team_number,
+                p.name,
+                COALESCE(p.skill_rating, 5) AS skill_rating
+            FROM team_assignments ta
+            JOIN players p ON p.id = ta.player_id
+            WHERE ta.game_id IN ({placeholders})
+            ORDER BY ta.game_id, ta.team_number, p.name
+        ''', game_ids).fetchall()
+
+    assignments_by_game = {}
+    for row in assignments:
+        assignments_by_game.setdefault(row['game_id'], {}).setdefault(row['team_number'], []).append(row)
+
+    balance_rows = []
+    for game in games:
+        teams = assignments_by_game.get(game['id'], {})
+        team1_players = teams.get(1, [])
+        team2_players = teams.get(2, [])
+
+        if not team1_players or not team2_players:
+            continue
+
+        team1_skill = sum(player['skill_rating'] for player in team1_players)
+        team2_skill = sum(player['skill_rating'] for player in team2_players)
+        total_skill = team1_skill + team2_skill
+        skill_gap = abs(team1_skill - team2_skill)
+        balance_score = round(max(0.0, 100.0 - (skill_gap * 100.0 / total_skill)), 1) if total_skill > 0 else 0.0
+
+        if game['team1_score'] == game['team2_score']:
+            result_label = 'Draw'
+        elif game['team1_score'] > game['team2_score']:
+            result_label = 'Team 1 won'
+        else:
+            result_label = 'Team 2 won'
+
+        if team1_skill == team2_skill:
+            skill_favorite = 'Even'
+        elif team1_skill > team2_skill:
+            skill_favorite = 'Team 1'
+        else:
+            skill_favorite = 'Team 2'
+
+        balance_rows.append({
+            'game_id': game['id'],
+            'date': game['date'],
+            'team1_skill': team1_skill,
+            'team2_skill': team2_skill,
+            'skill_gap': skill_gap,
+            'balance_score': balance_score,
+            'team1_score': game['team1_score'],
+            'team2_score': game['team2_score'],
+            'result_label': result_label,
+            'skill_favorite': skill_favorite
+        })
+
+    balance_rows.sort(key=lambda row: (-row['balance_score'], row['skill_gap'], row['date']))
+
+    total_games = len(balance_rows)
+    average_balance_score = round(sum(row['balance_score'] for row in balance_rows) / total_games, 1) if total_games else 0.0
+    balanced_game_count = sum(1 for row in balance_rows if row['balance_score'] >= 85.0)
+    best_balanced_games = balance_rows[:10]
+    worst_balanced_games = list(reversed(balance_rows[-10:]))
+
+    return render_template(
+        'stats_balance.html',
+        year=current_year,
+        average_balance_score=average_balance_score,
+        balanced_game_count=balanced_game_count,
+        total_games=total_games,
+        best_balanced_games=best_balanced_games,
+        worst_balanced_games=worst_balanced_games
+    )
+
 # Simple health/version endpoints for smoke testing
 @app.route('/healthz')
 @app.route('/status')
