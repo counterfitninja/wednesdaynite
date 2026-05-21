@@ -177,6 +177,187 @@ def balance_score_stats():
         worst_balanced_games=worst_balanced_games
     )
 
+
+@app.route('/stats/margins')
+def score_margins_stats():
+    current_year = datetime.now().year
+
+    with get_db() as conn:
+        games = conn.execute('''
+            SELECT id, date, team1_score, team2_score
+            FROM games
+            WHERE team1_score IS NOT NULL
+                AND team2_score IS NOT NULL
+                AND (is_abandoned IS NULL OR is_abandoned = 0)
+                AND strftime('%Y', date) = ?
+            ORDER BY date DESC
+        ''', (str(current_year),)).fetchall()
+
+        if not games:
+            return render_template(
+                'stats_margins.html',
+                year=current_year,
+                total_games=0,
+                average_margin=0.0,
+                draw_games_count=0,
+                close_games_count=0,
+                blowout_games_count=0,
+                closest_games=[],
+                biggest_wins=[],
+                clinical_players=[],
+                blowout_players=[],
+                top_clutch_player=None
+            )
+
+        margin_rows = []
+        for game in games:
+            team1_score = game['team1_score']
+            team2_score = game['team2_score']
+            margin = abs(team1_score - team2_score)
+            total_goals = team1_score + team2_score
+
+            if team1_score == team2_score:
+                winner_label = 'Draw'
+            elif team1_score > team2_score:
+                winner_label = 'Pink Team'
+            else:
+                winner_label = 'Yellow Team'
+
+            margin_rows.append({
+                'game_id': game['id'],
+                'date': game['date'],
+                'team1_score': team1_score,
+                'team2_score': team2_score,
+                'margin': margin,
+                'total_goals': total_goals,
+                'winner_label': winner_label
+            })
+
+        total_games = len(margin_rows)
+        average_margin = round(sum(row['margin'] for row in margin_rows) / total_games, 2) if total_games else 0.0
+        draw_games_count = sum(1 for row in margin_rows if row['margin'] == 0)
+        close_games_count = sum(1 for row in margin_rows if row['margin'] == 1)
+        blowout_games_count = sum(1 for row in margin_rows if row['margin'] >= 3)
+
+        closest_games = sorted(
+            margin_rows,
+            key=lambda row: (row['margin'], -row['total_goals'], row['date'])
+        )[:10]
+
+        biggest_wins = sorted(
+            margin_rows,
+            key=lambda row: (-row['margin'], -row['total_goals'], row['date'])
+        )[:10]
+
+        clinical_rows = conn.execute('''
+            SELECT
+                p.id,
+                p.name,
+                COUNT(*) as close_games,
+                SUM(CASE
+                    WHEN (ta.team_number = 1 AND g.team1_score > g.team2_score) OR
+                         (ta.team_number = 2 AND g.team2_score > g.team1_score)
+                    THEN 1 ELSE 0
+                END) as close_wins,
+                SUM(CASE
+                    WHEN g.team1_score = g.team2_score
+                    THEN 1 ELSE 0
+                END) as close_draws
+            FROM players p
+            JOIN team_assignments ta ON p.id = ta.player_id
+            JOIN games g ON ta.game_id = g.id
+            WHERE g.team1_score IS NOT NULL
+                AND g.team2_score IS NOT NULL
+                AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+                AND strftime('%Y', g.date) = ?
+                AND ABS(g.team1_score - g.team2_score) = 1
+            GROUP BY p.id, p.name
+            HAVING close_games >= 2
+            ORDER BY
+                CAST(close_wins AS REAL) / close_games DESC,
+                close_games DESC,
+                p.name ASC
+        ''', (str(current_year),)).fetchall()
+
+        clinical_players = []
+        for row in clinical_rows:
+            close_games = row['close_games'] or 0
+            close_wins = row['close_wins'] or 0
+            close_draws = row['close_draws'] or 0
+            close_losses = max(0, close_games - close_wins - close_draws)
+            close_win_rate = round((close_wins * 100.0 / close_games), 1) if close_games > 0 else 0.0
+
+            clinical_players.append({
+                'id': row['id'],
+                'name': row['name'],
+                'name_initial': format_name_with_initial(row['name']),
+                'close_games': close_games,
+                'close_wins': close_wins,
+                'close_draws': close_draws,
+                'close_losses': close_losses,
+                'close_win_rate': close_win_rate
+            })
+
+        blowout_rows = conn.execute('''
+            SELECT
+                p.id,
+                p.name,
+                COUNT(*) as blowout_games,
+                SUM(CASE
+                    WHEN (ta.team_number = 1 AND g.team1_score > g.team2_score) OR
+                         (ta.team_number = 2 AND g.team2_score > g.team1_score)
+                    THEN 1 ELSE 0
+                END) as blowout_wins
+            FROM players p
+            JOIN team_assignments ta ON p.id = ta.player_id
+            JOIN games g ON ta.game_id = g.id
+            WHERE g.team1_score IS NOT NULL
+                AND g.team2_score IS NOT NULL
+                AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+                AND strftime('%Y', g.date) = ?
+                AND ABS(g.team1_score - g.team2_score) >= 3
+            GROUP BY p.id, p.name
+            HAVING blowout_games >= 2
+            ORDER BY
+                blowout_games DESC,
+                CAST(blowout_wins AS REAL) / blowout_games DESC,
+                p.name ASC
+        ''', (str(current_year),)).fetchall()
+
+        blowout_players = []
+        for row in blowout_rows:
+            blowout_games = row['blowout_games'] or 0
+            blowout_wins = row['blowout_wins'] or 0
+            blowout_losses = max(0, blowout_games - blowout_wins)
+            blowout_win_rate = round((blowout_wins * 100.0 / blowout_games), 1) if blowout_games > 0 else 0.0
+
+            blowout_players.append({
+                'id': row['id'],
+                'name': row['name'],
+                'name_initial': format_name_with_initial(row['name']),
+                'blowout_games': blowout_games,
+                'blowout_wins': blowout_wins,
+                'blowout_losses': blowout_losses,
+                'blowout_win_rate': blowout_win_rate
+            })
+
+    top_clutch_player = clinical_players[0] if clinical_players else None
+
+    return render_template(
+        'stats_margins.html',
+        year=current_year,
+        total_games=total_games,
+        average_margin=average_margin,
+        draw_games_count=draw_games_count,
+        close_games_count=close_games_count,
+        blowout_games_count=blowout_games_count,
+        closest_games=closest_games,
+        biggest_wins=biggest_wins,
+        clinical_players=clinical_players,
+        blowout_players=blowout_players,
+        top_clutch_player=top_clutch_player
+    )
+
 # Simple health/version endpoints for smoke testing
 @app.route('/healthz')
 @app.route('/status')
