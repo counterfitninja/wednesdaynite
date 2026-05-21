@@ -1173,6 +1173,7 @@ def players():
 def leaderboard():
     from datetime import datetime
     current_year = datetime.now().year
+    form_guide_lookup = {}
     best_active_streak = None
     best_synergy_pair = None
     momentum_lookup = {}
@@ -1251,6 +1252,32 @@ def leaderboard():
                 'loss_percentage': loss_pct,
                 'non_loss_percentage': non_loss_pct
             })
+
+        form_rows = conn.execute('''
+            SELECT
+                ta.player_id,
+                CASE
+                    WHEN (ta.team_number = 1 AND g.team1_score > g.team2_score) OR
+                         (ta.team_number = 2 AND g.team2_score > g.team1_score)
+                    THEN 'W'
+                    WHEN g.team1_score = g.team2_score
+                    THEN 'D'
+                    ELSE 'L'
+                END as result
+            FROM team_assignments ta
+            JOIN games g ON g.id = ta.game_id
+            WHERE g.team1_score IS NOT NULL
+                AND g.team2_score IS NOT NULL
+                AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+                AND strftime('%Y', g.date) = ?
+            ORDER BY g.date DESC, g.id DESC
+        ''', (str(current_year),)).fetchall()
+
+        for row in form_rows:
+            player_id = row['player_id']
+            form_results = form_guide_lookup.setdefault(player_id, [])
+            if len(form_results) < 5:
+                form_results.append(row['result'])
         
         # Get total games with scores
         total_games = conn.execute('''
@@ -1512,6 +1539,7 @@ def leaderboard():
     
     return render_template('leaderboard.html', 
                          leaderboard=leaderboard,
+                         form_guide_lookup=form_guide_lookup,
                          attendance_leaderboard=attendance_data,
                          total_games=total_games,
                          total_players=len(leaderboard),

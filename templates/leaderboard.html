@@ -8,12 +8,44 @@
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
     }
+    .form-guide {
+        display: inline-flex;
+        gap: 4px;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    .form-dot {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #fff;
+    }
+    .form-dot-win {
+        background: #27ae60;
+    }
+    .form-dot-draw {
+        background: #95a5a6;
+    }
+    .form-dot-loss {
+        background: #e74c3c;
+    }
     @media (max-width: 480px) {
         .leaderboard-stats-grid {
             grid-template-columns: 1fr;
         }
         .leaderboard-stats-grid .stat {
             padding: 12px;
+        }
+        .form-dot {
+            width: 18px;
+            height: 18px;
+            font-size: 0.7rem;
         }
     }
 </style>
@@ -271,6 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <th data-sort-col="draws" onclick="sortWinsTable('draws')" style="text-align: center; cursor: pointer; user-select: none;">Draws<span class="sort-indicator"></span></th>
                 <th data-sort-col="losses" onclick="sortWinsTable('losses')" style="text-align: center; cursor: pointer; user-select: none;">Losses<span class="sort-indicator"></span></th>
                 <th data-sort-col="total_games" onclick="sortWinsTable('total_games')" style="text-align: center; cursor: pointer; user-select: none;">Games<span class="sort-indicator"></span></th>
+                <th style="text-align: center;">Form (L5)</th>
                 <th data-sort-col="win_percentage" onclick="sortWinsTable('win_percentage')" style="text-align: center; cursor: pointer; user-select: none;">Win %<span class="sort-indicator"></span></th>
                 <th data-sort-col="loss_percentage" onclick="sortWinsTable('loss_percentage')" style="text-align: center; cursor: pointer; user-select: none;">Loss Ratio<span class="sort-indicator"></span></th>
                 <th data-sort-col="non_loss_percentage" onclick="sortWinsTable('non_loss_percentage')" style="text-align: center; cursor: pointer; user-select: none;">Non-Loss Ratio<span class="sort-indicator"></span></th>
@@ -279,6 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <tbody id="wins-tbody">
             {% for player in leaderboard %}
             {% set momentum = momentum_lookup.get(player.id) if momentum_lookup else None %}
+            {% set form_guide = form_guide_lookup.get(player.id, []) if form_guide_lookup else [] %}
             <tr data-name="{{ player.name|name_initial }}" data-wins="{{ player.wins }}" data-draws="{{ player.draws }}" data-losses="{{ player.losses }}" data-total_games="{{ player.total_games }}" data-win_percentage="{{ player.win_percentage }}" data-loss_percentage="{{ player.loss_percentage }}" data-non_loss_percentage="{{ player.non_loss_percentage }}">
                 <td style="text-align: center;">
                     {% if loop.index == 1 %}
@@ -307,6 +341,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span class="badge badge-danger">{{ player.losses }}</span>
                 </td>
                 <td style="text-align: center;">{{ player.total_games }}</td>
+                <td style="text-align: center;">
+                    {% if form_guide %}
+                    <div class="form-guide" aria-label="Last five results">
+                        {% for result in form_guide %}
+                            {% if result == 'W' %}
+                            <span class="form-dot form-dot-win" title="Win">W</span>
+                            {% elif result == 'D' %}
+                            <span class="form-dot form-dot-draw" title="Draw">D</span>
+                            {% else %}
+                            <span class="form-dot form-dot-loss" title="Loss">L</span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <span style="color: #95a5a6;">-</span>
+                    {% endif %}
+                </td>
                 <td style="text-align: center;">
                     <strong style="color: #3498db;">{{ player.win_percentage }}%</strong>
                 </td>

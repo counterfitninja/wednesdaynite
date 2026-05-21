@@ -26,3 +26,17 @@
 - Added `/stats/momentum` page with top hot/cooling highlights and per-player momentum table.
 - Added leaderboard integration: top momentum card + `🔥 Hot` badge on players trending up.
 - Validation: `python -m py_compile app.py` passed; editor diagnostics show no errors on touched files.
+
+# Form Guide (Last 5)
+
+- [x] Add leaderboard-side query logic to compute each player's last five scored outcomes (W/D/L).
+- [x] Pass a per-player form guide map into leaderboard template rendering.
+- [x] Add a new `Form (L5)` column with compact W/D/L dots in the wins table.
+- [x] Keep leaderboard sorting behavior unchanged.
+- [x] Run focused validation and note results.
+
+## Review
+
+- Added leaderboard form computation in `leaderboard()` by scanning scored, non-abandoned games for the current year and retaining the latest five results per player.
+- Added a `Form (L5)` wins-table column in `leaderboard.html` with color-coded circles for `W`, `D`, and `L`.
+- Validation: `python -m py_compile app.py` passed; editor diagnostics show no errors on touched files.
