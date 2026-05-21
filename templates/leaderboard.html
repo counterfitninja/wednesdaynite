@@ -13,7 +13,8 @@
         gap: 4px;
         align-items: center;
         justify-content: center;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
+        white-space: nowrap;
     }
     .form-dot {
         width: 20px;
@@ -41,6 +42,10 @@
         }
         .leaderboard-stats-grid .stat {
             padding: 12px;
+        }
+        #wins-table th:nth-child(7),
+        #wins-table td:nth-child(7) {
+            min-width: 118px;
         }
         .form-dot {
             width: 18px;
