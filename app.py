@@ -265,9 +265,9 @@ def stats_margins():
         if t1 == t2:
             winner_label = 'Draw'
         elif t1 > t2:
-            winner_label = 'Team 1'
+            winner_label = 'Pink'
         else:
-            winner_label = 'Team 2'
+            winner_label = 'Yellow'
 
         blowout_rows.append({
             'game_id': gid,
