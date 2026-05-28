@@ -178,6 +178,207 @@ def balance_score_stats():
     )
 
 
+@app.route('/stats/margins')
+def stats_margins():
+    current_year = datetime.now().year
+    min_wins_raw = request.args.get('min_wins', '2').strip()
+    min_wins_options = [1, 2, 3, 5]
+
+    try:
+        min_wins = int(min_wins_raw)
+    except ValueError:
+        min_wins = 2
+
+    if min_wins not in min_wins_options:
+        min_wins = 2
+
+    with get_db() as conn:
+        games = conn.execute('''
+            SELECT id, date, team1_score, team2_score
+            FROM games
+            WHERE team1_score IS NOT NULL
+                AND team2_score IS NOT NULL
+                AND (is_abandoned IS NULL OR is_abandoned = 0)
+                AND strftime('%Y', date) = ?
+            ORDER BY date ASC
+        ''', (str(current_year),)).fetchall()
+
+        if not games:
+            return render_template(
+                'stats_margins.html',
+                year=current_year,
+                total_games=0,
+                average_game_margin=0.0,
+                largest_margin=0,
+                player_rows=[],
+                clinical_rows=[],
+                blowout_rows=[],
+                min_wins=min_wins,
+                min_wins_options=min_wins_options
+            )
+
+        game_ids = [g['id'] for g in games]
+        placeholders = ','.join('?' * len(game_ids))
+        assignments = conn.execute(f'''
+            SELECT ta.game_id, ta.player_id, ta.team_number, p.name
+            FROM team_assignments ta
+            JOIN players p ON p.id = ta.player_id
+            WHERE ta.game_id IN ({placeholders})
+            ORDER BY ta.game_id, ta.team_number, p.name
+        ''', game_ids).fetchall()
+
+    assignments_by_game = {}
+    player_names = {}
+    for row in assignments:
+        assignments_by_game.setdefault(row['game_id'], []).append(row)
+        player_names[row['player_id']] = row['name']
+
+    player_stats = {
+        pid: {
+            'games': 0,
+            'wins': 0,
+            'draws': 0,
+            'losses': 0,
+            'goals_for': 0,
+            'goals_against': 0,
+            'total_margin': 0,
+            'win_margin_total': 0,
+            'loss_margin_total': 0,
+            'biggest_win': 0,
+            'biggest_loss': 0
+        }
+        for pid in player_names.keys()
+    }
+
+    blowout_rows = []
+    game_margins = []
+
+    for game in games:
+        gid = game['id']
+        team_rows = assignments_by_game.get(gid, [])
+        if not team_rows:
+            continue
+
+        t1 = game['team1_score']
+        t2 = game['team2_score']
+        margin = abs(t1 - t2)
+        game_margins.append(margin)
+
+        if t1 == t2:
+            winner_label = 'Draw'
+        elif t1 > t2:
+            winner_label = 'Team 1'
+        else:
+            winner_label = 'Team 2'
+
+        blowout_rows.append({
+            'game_id': gid,
+            'date': game['date'],
+            'team1_score': t1,
+            'team2_score': t2,
+            'margin': margin,
+            'winner_label': winner_label
+        })
+
+        for row in team_rows:
+            pid = row['player_id']
+            team_number = row['team_number']
+            stats = player_stats[pid]
+
+            goals_for = t1 if team_number == 1 else t2
+            goals_against = t2 if team_number == 1 else t1
+            goal_margin = goals_for - goals_against
+
+            stats['games'] += 1
+            stats['goals_for'] += goals_for
+            stats['goals_against'] += goals_against
+            stats['total_margin'] += goal_margin
+
+            if goal_margin > 0:
+                stats['wins'] += 1
+                stats['win_margin_total'] += goal_margin
+                stats['biggest_win'] = max(stats['biggest_win'], goal_margin)
+            elif goal_margin < 0:
+                stats['losses'] += 1
+                stats['loss_margin_total'] += abs(goal_margin)
+                stats['biggest_loss'] = min(stats['biggest_loss'], goal_margin)
+            else:
+                stats['draws'] += 1
+
+    player_rows = []
+    for pid, stats in player_stats.items():
+        if stats['games'] == 0:
+            continue
+
+        win_rate = round((stats['wins'] * 100.0 / stats['games']), 1)
+        avg_margin = round((stats['total_margin'] / stats['games']), 2)
+        avg_win_margin = round((stats['win_margin_total'] / stats['wins']), 2) if stats['wins'] > 0 else 0.0
+        avg_loss_margin = round((stats['loss_margin_total'] / stats['losses']), 2) if stats['losses'] > 0 else 0.0
+
+        player_rows.append({
+            'player_id': pid,
+            'name': player_names[pid],
+            'name_initial': format_name_with_initial(player_names[pid]),
+            'games': stats['games'],
+            'wins': stats['wins'],
+            'draws': stats['draws'],
+            'losses': stats['losses'],
+            'goals_for': stats['goals_for'],
+            'goals_against': stats['goals_against'],
+            'goal_difference': stats['total_margin'],
+            'win_rate': win_rate,
+            'avg_margin': avg_margin,
+            'avg_win_margin': avg_win_margin,
+            'avg_loss_margin': avg_loss_margin,
+            'biggest_win': stats['biggest_win'],
+            'biggest_loss': stats['biggest_loss']
+        })
+
+    player_rows.sort(
+        key=lambda row: (
+            -row['avg_margin'],
+            -row['goal_difference'],
+            -row['wins'],
+            row['name'].lower()
+        )
+    )
+
+    clinical_rows = [row for row in player_rows if row['wins'] >= min_wins and row['avg_win_margin'] > 0]
+    clinical_rows.sort(
+        key=lambda row: (
+            -row['avg_win_margin'],
+            -row['win_rate'],
+            -row['wins'],
+            row['name'].lower()
+        )
+    )
+
+    blowout_rows.sort(
+        key=lambda row: (
+            -row['margin'],
+            row['date'],
+            row['game_id']
+        )
+    )
+
+    total_games = len(game_margins)
+    average_game_margin = round(sum(game_margins) / total_games, 2) if total_games > 0 else 0.0
+    largest_margin = max(game_margins) if game_margins else 0
+
+    return render_template(
+        'stats_margins.html',
+        year=current_year,
+        total_games=total_games,
+        average_game_margin=average_game_margin,
+        largest_margin=largest_margin,
+        player_rows=player_rows,
+        clinical_rows=clinical_rows[:10],
+        blowout_rows=blowout_rows[:15],
+        min_wins=min_wins,
+        min_wins_options=min_wins_options
+    )
+
+
 # Simple health/version endpoints for smoke testing
 @app.route('/healthz')
 @app.route('/status')
