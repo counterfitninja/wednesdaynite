@@ -2,15 +2,22 @@
 
 Work through one per week. Mark completed items with ✅.
 
+## Completed This Month (May 2026)
+
+- ✅ Score Margins Page (`/stats/margins`) - all-time default, clinical ranking, one-sided games table, Pink/Yellow winner labels.
+- ✅ Season Momentum (`/stats/momentum`) - last 8 weeks vs season baseline.
+
+---
+
 1. ✅ **Form Guide (Last 5 Results)** — W/D/L dot row on leaderboard showing each player's last 5 results.
-2. ✅ **Score Margins Page** — `/stats/margins`: avg goal diff, biggest wins/losses, "clinical" ranking.
+2. ✅ **Score Margins Page** — `/stats/margins`: all-time by default; avg goal diff, biggest wins/losses, "clinical" ranking, and most one-sided games (winner shown as Pink/Yellow).
 3. ✅ **Nemesis / Rival Matrix** — Opponent win rates (who beats who). Flip of Synergy Matrix using same data.
 4. **Attendance Streak Tracker** — Longest consecutive week attendance streaks, current + all-time.
 5. ✅ **Head-to-Head Comparison** — `/stats/h2h?a=X&b=Y`: W/D/L, win rate, synergy together, record as opponents.
 6. **All-Time / Career Stats** — Year selector on leaderboard + player stats, plus all-time aggregate view.
 7. **Rolling Win Rate Chart** — Rolling win % (last 5 or 10 games) chart, smoother than cumulative rank.
 8. **Most Improved** — Compare win rate in first half vs second half of year. Surfaced as leaderboard highlight.
-9. **Goal Stats Page** — Per-game goal averages, highest-scoring games, most one-sided results, clean sheets.
+9. **Goal Stats Page** — Per-game goal averages, highest-scoring games, clean sheets (exclude one-sided table; now covered by Score Margins).
 10. **Player Profile Enhancement** — Add to player stats: current streak, best streak, best synergy partner, nemesis.
 
 ---
