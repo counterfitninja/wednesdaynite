@@ -180,7 +180,6 @@ def balance_score_stats():
 
 @app.route('/stats/margins')
 def stats_margins():
-    current_year = datetime.now().year
     min_wins_raw = request.args.get('min_wins', '2').strip()
     min_wins_options = [1, 2, 3, 5]
 
@@ -199,14 +198,13 @@ def stats_margins():
             WHERE team1_score IS NOT NULL
                 AND team2_score IS NOT NULL
                 AND (is_abandoned IS NULL OR is_abandoned = 0)
-                AND strftime('%Y', date) = ?
             ORDER BY date ASC
-        ''', (str(current_year),)).fetchall()
+        ''').fetchall()
 
         if not games:
             return render_template(
                 'stats_margins.html',
-                year=current_year,
+                scope_label='All-Time',
                 total_games=0,
                 average_game_margin=0.0,
                 largest_margin=0,
@@ -367,7 +365,7 @@ def stats_margins():
 
     return render_template(
         'stats_margins.html',
-        year=current_year,
+        scope_label='All-Time',
         total_games=total_games,
         average_game_margin=average_game_margin,
         largest_margin=largest_margin,
