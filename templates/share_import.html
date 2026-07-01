@@ -1,0 +1,309 @@
+{% extends "base.html" %}
+
+{% block title %}Image Share Import - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<a href="/" class="btn" style="margin-bottom: 20px;">← Back to Games</a>
+
+<div class="card">
+    <h1>Share WhatsApp Image to Player List</h1>
+    <p style="margin-bottom: 10px;">Send a screenshot of the WhatsApp player list to this PWA, then extract names into attendance.</p>
+    <p style="color: #7f8c8d; font-size: 0.95em;">Tip: in WhatsApp use <strong>Share</strong> → <strong>WNFC</strong> after you install this app.</p>
+</div>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<div class="card">
+    <h2>1) Upload or Receive Image</h2>
+    <form method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="game_id" value="{{ selected_game_id or '' }}">
+        <div class="form-group">
+            <label for="image">Player List Image</label>
+            <input type="file" id="image" name="image" accept="image/*" capture="environment">
+            <p style="color: #7f8c8d; font-size: 0.9em; margin-top: 6px;">JPG/PNG/WebP all work. Keep the list text visible and cropped tightly for best extraction.</p>
+        </div>
+
+        <div class="form-group">
+            <label for="text">Optional Shared Text</label>
+            <textarea id="text" name="text" placeholder="Any text shared alongside the image...">{{ shared_text }}</textarea>
+            <p style="color: #7f8c8d; font-size: 0.9em; margin-top: 6px;">If no image is available, text-only extraction can still help.</p>
+        </div>
+
+        <button type="submit" class="btn btn-success">Load for Extraction</button>
+    </form>
+</div>
+
+<div class="grid" style="grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 20px;">
+    <div class="card">
+        <h2>2) Preview</h2>
+        {% if image_data_url %}
+        <img id="shared-image" src="{{ image_data_url }}" alt="Shared player list" style="width: 100%; border-radius: 6px; border: 1px solid #ddd;">
+        {% else %}
+        <p style="color: #7f8c8d;">No image loaded yet. Upload an image above or share one from WhatsApp.</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h2>3) Extract Names</h2>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
+            <button type="button" id="extract-btn" class="btn">Extract From Image</button>
+            <button type="button" id="extract-server-btn" class="btn" style="background: #455a64;">Extract On Server</button>
+            <button type="button" id="extract-text-btn" class="btn" style="background: #607d8b;">Extract From Text</button>
+            <button type="button" id="clear-btn" class="btn" style="background: #7f8c8d;">Clear</button>
+        </div>
+
+        <p style="color: #7f8c8d; font-size: 0.9em; margin-bottom: 12px;">If browser extraction is unavailable, the app will automatically try server OCR.</p>
+
+        <div id="extract-status" style="display: none; margin-bottom: 12px; padding: 10px; border-radius: 4px;"></div>
+
+        <form method="POST" id="attendance-form" action="{% if selected_game_id %}/games/{{ selected_game_id }}/bulk-attendance{% else %}#{% endif %}">
+            <div class="form-group">
+                <label for="game_id">Game</label>
+                <select id="game_id" required>
+                    {% if games %}
+                        {% for game in games %}
+                        <option value="{{ game.id }}" {% if selected_game_id == game.id %}selected{% endif %}>{{ game.date|ukdate }}{% if game.location %} - {{ game.location }}{% endif %}</option>
+                        {% endfor %}
+                    {% else %}
+                        <option value="">No games available</option>
+                    {% endif %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="players_text">Players Who Played (one per line)</label>
+                <textarea id="players_text" name="players_text" style="min-height: 220px;" placeholder="Names will appear here..."></textarea>
+                <p style="color: #7f8c8d; font-size: 0.9em; margin-top: 6px;">Quick check before submit: remove anyone who is not actually playing.</p>
+            </div>
+
+            <button type="submit" class="btn btn-success">✅ Mark as Playing</button>
+        </form>
+    </div>
+</div>
+
+<script>
+(function() {
+    const gameSelect = document.getElementById('game_id');
+    const attendanceForm = document.getElementById('attendance-form');
+    const image = document.getElementById('shared-image');
+    const sharedText = document.getElementById('text');
+    const playersTextarea = document.getElementById('players_text');
+    const extractStatus = document.getElementById('extract-status');
+    const extractBtn = document.getElementById('extract-btn');
+    const extractServerBtn = document.getElementById('extract-server-btn');
+    const extractTextBtn = document.getElementById('extract-text-btn');
+    const clearBtn = document.getElementById('clear-btn');
+    const imageDataUrl = {{ image_data_url|tojson }};
+
+    const stopWords = new Set([
+        'yes', 'no', 'maybe', 'responded', 'response', 'responses', 'poll', 'vote', 'votes',
+        'in', 'out', 'playing', 'not playing', 'available', 'unavailable', 'attending',
+        'players', 'player', 'list', 'wednesday', 'night', 'fc', 'team', 'teams'
+    ]);
+
+    function showStatus(message, kind) {
+        extractStatus.style.display = 'block';
+        extractStatus.textContent = message;
+        if (kind === 'error') {
+            extractStatus.style.background = '#f8d7da';
+            extractStatus.style.color = '#721c24';
+            extractStatus.style.border = '1px solid #f5c6cb';
+        } else {
+            extractStatus.style.background = '#d4edda';
+            extractStatus.style.color = '#155724';
+            extractStatus.style.border = '1px solid #c3e6cb';
+        }
+    }
+
+    function updateAttendanceAction() {
+        const gameId = gameSelect.value;
+        attendanceForm.action = gameId ? `/games/${gameId}/bulk-attendance` : '#';
+    }
+
+    function cleanCandidate(line) {
+        if (!line) {
+            return '';
+        }
+
+        let value = line
+            .replace(/[•●▪◆⭐✨✅❌☑️🟢🟡🟠🔴]/g, ' ')
+            .replace(/^\s*[\d]+[\.)\-:]\s*/, '')
+            .replace(/^\s*[-–—]\s*/, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        // Common "Name - yes" / "Name, maybe" formats.
+        value = value.replace(/\s*[-:,|]\s*(yes|no|maybe|in|out|playing|not playing)\s*$/i, '').trim();
+
+        if (!/[A-Za-z]/.test(value)) {
+            return '';
+        }
+
+        if (value.length < 2 || value.length > 50) {
+            return '';
+        }
+
+        // Keep only name-like characters.
+        value = value.replace(/[^A-Za-z'\-.\s]/g, '').replace(/\s+/g, ' ').trim();
+
+        const lower = value.toLowerCase();
+        if (!value || stopWords.has(lower)) {
+            return '';
+        }
+
+        const words = value.split(' ').filter(Boolean);
+        if (words.length > 4) {
+            return '';
+        }
+
+        return value;
+    }
+
+    function extractNamesFromText(rawText) {
+        const lines = String(rawText || '').split(/\r?\n/);
+        const unique = new Map();
+
+        lines.forEach(line => {
+            const candidate = cleanCandidate(line);
+            if (!candidate) {
+                return;
+            }
+            const key = candidate.toLowerCase();
+            if (!unique.has(key)) {
+                unique.set(key, candidate);
+            }
+        });
+
+        return Array.from(unique.values());
+    }
+
+    function mergeIntoTextarea(names) {
+        const existing = extractNamesFromText(playersTextarea.value).map(n => n.toLowerCase());
+        const merged = playersTextarea.value
+            .split(/\r?\n/)
+            .map(v => v.trim())
+            .filter(Boolean);
+
+        names.forEach(name => {
+            if (!existing.includes(name.toLowerCase())) {
+                merged.push(name);
+                existing.push(name.toLowerCase());
+            }
+        });
+
+        playersTextarea.value = merged.join('\n');
+    }
+
+    async function extractFromImage() {
+        if (!image) {
+            showStatus('No image loaded yet. Upload or share one first.', 'error');
+            return;
+        }
+
+        if (!('TextDetector' in window)) {
+            await extractFromServer('Browser OCR is not supported here. Trying server OCR...');
+            return;
+        }
+
+        extractBtn.disabled = true;
+        showStatus('Extracting text from image...', 'ok');
+
+        try {
+            const detector = new TextDetector();
+            const bitmap = await createImageBitmap(image);
+            const blocks = await detector.detect(bitmap);
+            const rawLines = [];
+
+            blocks.forEach(block => {
+                if (Array.isArray(block.lines) && block.lines.length) {
+                    block.lines.forEach(line => {
+                        if (line.rawValue) {
+                            rawLines.push(line.rawValue);
+                        }
+                    });
+                } else if (block.rawValue) {
+                    rawLines.push(block.rawValue);
+                }
+            });
+
+            const names = extractNamesFromText(rawLines.join('\n'));
+            if (!names.length) {
+                showStatus('No clear names found. Try a tighter crop or better contrast image.', 'error');
+                return;
+            }
+
+            mergeIntoTextarea(names);
+            showStatus(`Extracted ${names.length} names.`, 'ok');
+        } catch (error) {
+            await extractFromServer(`Browser extraction failed (${error.message}). Trying server OCR...`);
+        } finally {
+            extractBtn.disabled = false;
+        }
+    }
+
+    async function extractFromServer(initialMessage) {
+        if (!imageDataUrl) {
+            showStatus('No image data is loaded yet. Upload or share one first.', 'error');
+            return;
+        }
+
+        extractServerBtn.disabled = true;
+        showStatus(initialMessage || 'Running server OCR...', 'ok');
+
+        try {
+            const response = await fetch('/api/ocr/extract-names', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ image_data_url: imageDataUrl })
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.ok) {
+                throw new Error(data.error || 'Server OCR request failed');
+            }
+
+            if (!data.names || !data.names.length) {
+                showStatus('Server OCR ran but did not find clear names. Try a tighter crop.', 'error');
+                return;
+            }
+
+            mergeIntoTextarea(data.names);
+            showStatus(`Server OCR extracted ${data.count} names.`, 'ok');
+        } catch (error) {
+            showStatus(`Server OCR failed: ${error.message}`, 'error');
+        } finally {
+            extractServerBtn.disabled = false;
+        }
+    }
+
+    function extractFromSharedText() {
+        const names = extractNamesFromText(sharedText.value);
+        if (!names.length) {
+            showStatus('No names found in shared text.', 'error');
+            return;
+        }
+
+        mergeIntoTextarea(names);
+        showStatus(`Extracted ${names.length} names from text.`, 'ok');
+    }
+
+    function clearNames() {
+        playersTextarea.value = '';
+        extractStatus.style.display = 'none';
+    }
+
+    gameSelect.addEventListener('change', updateAttendanceAction);
+    extractBtn.addEventListener('click', extractFromImage);
+    extractServerBtn.addEventListener('click', () => extractFromServer());
+    extractTextBtn.addEventListener('click', extractFromSharedText);
+    clearBtn.addEventListener('click', clearNames);
+
+    updateAttendanceAction();
+})();
+</script>
+{% endblock %}

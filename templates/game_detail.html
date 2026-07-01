@@ -64,6 +64,8 @@
         <p style="color: #7f8c8d; font-size: 0.9em; margin-bottom: 10px;">
             📝 <span class="desktop-only">Hold Ctrl (Cmd on Mac) to select multiple players, or Shift for range selection</span><span class="mobile-only">Tap multiple players to select</span>
         </p>
+        <a href="/share-target?game_id={{ game.id }}" class="btn" style="margin-bottom: 12px; background-color: #607d8b;">📷 Import from WhatsApp Image</a>
+        <p style="color: #7f8c8d; font-size: 0.9em; margin: -2px 0 12px 0;">Share a screenshot from WhatsApp to the WNFC PWA, then extract names into this game.</p>
         <form method="POST" action="/games/{{ game.id }}/bulk-attendance">
             <div class="form-group">
                 <label for="historic_players">Quick Select Historic Players (Multi-select enabled)</label>
