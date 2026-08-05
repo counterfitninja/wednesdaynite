@@ -284,6 +284,180 @@ def stats_margins():
     )
 
 
+@app.route('/stats/balance')
+def stats_balance():
+    with get_db() as conn:
+        games = conn.execute('''
+            SELECT id, date, team1_score, team2_score
+            FROM games
+            WHERE team1_score IS NOT NULL
+                AND team2_score IS NOT NULL
+                AND (is_abandoned IS NULL OR is_abandoned = 0)
+            ORDER BY date ASC, id ASC
+        ''').fetchall()
+
+        if not games:
+            return render_template(
+                'stats_balance.html',
+                scope_label='All-Time',
+                total_games=0,
+                balanced_games=0,
+                uneven_games=0,
+                larger_team_wins=0,
+                smaller_team_wins=0,
+                uneven_draws=0,
+                larger_team_win_rate=0.0,
+                smaller_team_win_rate=0.0,
+                balance_rows=[],
+                recent_uneven_games=[],
+                focus_8v7=None
+            )
+
+        game_ids = [g['id'] for g in games]
+        placeholders = ','.join('?' * len(game_ids))
+        assignments = conn.execute(f'''
+            SELECT game_id, team_number
+            FROM team_assignments
+            WHERE game_id IN ({placeholders})
+        ''', game_ids).fetchall()
+
+    team_sizes_by_game = {}
+    for row in assignments:
+        gid = row['game_id']
+        team_number = row['team_number']
+        if team_number not in (1, 2):
+            continue
+        if gid not in team_sizes_by_game:
+            team_sizes_by_game[gid] = {1: 0, 2: 0}
+        team_sizes_by_game[gid][team_number] += 1
+
+    balanced_games = 0
+    uneven_games = 0
+    larger_team_wins = 0
+    smaller_team_wins = 0
+    uneven_draws = 0
+
+    matchup_stats = {}
+    recent_uneven_games = []
+
+    for game in games:
+        gid = game['id']
+        sizes = team_sizes_by_game.get(gid, {1: 0, 2: 0})
+        team1_size = sizes.get(1, 0)
+        team2_size = sizes.get(2, 0)
+
+        if team1_size <= 0 or team2_size <= 0:
+            continue
+
+        if team1_size == team2_size:
+            balanced_games += 1
+            continue
+
+        uneven_games += 1
+
+        larger_team_number = 1 if team1_size > team2_size else 2
+        smaller_team_number = 2 if larger_team_number == 1 else 1
+        larger_size = max(team1_size, team2_size)
+        smaller_size = min(team1_size, team2_size)
+
+        larger_team_score = game['team1_score'] if larger_team_number == 1 else game['team2_score']
+        smaller_team_score = game['team2_score'] if larger_team_number == 1 else game['team1_score']
+
+        matchup_key = (larger_size, smaller_size)
+        if matchup_key not in matchup_stats:
+            matchup_stats[matchup_key] = {
+                'larger_size': larger_size,
+                'smaller_size': smaller_size,
+                'games': 0,
+                'larger_wins': 0,
+                'smaller_wins': 0,
+                'draws': 0
+            }
+
+        matchup_stats[matchup_key]['games'] += 1
+
+        if larger_team_score > smaller_team_score:
+            larger_team_wins += 1
+            matchup_stats[matchup_key]['larger_wins'] += 1
+            result_label = 'Larger team won'
+        elif larger_team_score < smaller_team_score:
+            smaller_team_wins += 1
+            matchup_stats[matchup_key]['smaller_wins'] += 1
+            result_label = 'Smaller team won'
+        else:
+            uneven_draws += 1
+            matchup_stats[matchup_key]['draws'] += 1
+            result_label = 'Draw'
+
+        larger_color = 'Pink' if larger_team_number == 1 else 'Yellow'
+        smaller_color = 'Yellow' if larger_team_number == 1 else 'Pink'
+
+        recent_uneven_games.append({
+            'date': game['date'],
+            'game_id': gid,
+            'team1_score': game['team1_score'],
+            'team2_score': game['team2_score'],
+            'size_label': f"{larger_size}v{smaller_size}",
+            'detail_label': f"{larger_color} {larger_size} vs {smaller_color} {smaller_size}",
+            'result_label': result_label
+        })
+
+    balance_rows = []
+    for key, stats in matchup_stats.items():
+        games_count = stats['games']
+        larger_win_rate = round((stats['larger_wins'] * 100.0 / games_count), 1) if games_count else 0.0
+        smaller_win_rate = round((stats['smaller_wins'] * 100.0 / games_count), 1) if games_count else 0.0
+
+        balance_rows.append({
+            'larger_size': stats['larger_size'],
+            'smaller_size': stats['smaller_size'],
+            'size_label': f"{stats['larger_size']}v{stats['smaller_size']}",
+            'player_gap': stats['larger_size'] - stats['smaller_size'],
+            'games': games_count,
+            'larger_wins': stats['larger_wins'],
+            'smaller_wins': stats['smaller_wins'],
+            'draws': stats['draws'],
+            'larger_win_rate': larger_win_rate,
+            'smaller_win_rate': smaller_win_rate
+        })
+
+    balance_rows.sort(
+        key=lambda row: (
+            -(row['player_gap']),
+            -row['games'],
+            -row['larger_size'],
+            -row['smaller_size']
+        )
+    )
+
+    recent_uneven_games.sort(key=lambda row: (row['date'], row['game_id']), reverse=True)
+
+    larger_team_win_rate = round((larger_team_wins * 100.0 / uneven_games), 1) if uneven_games else 0.0
+    smaller_team_win_rate = round((smaller_team_wins * 100.0 / uneven_games), 1) if uneven_games else 0.0
+
+    focus_8v7 = None
+    for row in balance_rows:
+        if row['larger_size'] == 8 and row['smaller_size'] == 7:
+            focus_8v7 = row
+            break
+
+    return render_template(
+        'stats_balance.html',
+        scope_label='All-Time',
+        total_games=len(games),
+        balanced_games=balanced_games,
+        uneven_games=uneven_games,
+        larger_team_wins=larger_team_wins,
+        smaller_team_wins=smaller_team_wins,
+        uneven_draws=uneven_draws,
+        larger_team_win_rate=larger_team_win_rate,
+        smaller_team_win_rate=smaller_team_win_rate,
+        balance_rows=balance_rows,
+        recent_uneven_games=recent_uneven_games[:20],
+        focus_8v7=focus_8v7
+    )
+
+
 # Simple health/version endpoints for smoke testing
 @app.route('/healthz')
 @app.route('/status')
@@ -3118,6 +3292,11 @@ def service_worker():
     response.headers['Content-Type'] = 'application/javascript'
     response.headers['Service-Worker-Allowed'] = '/'
     return response
+
+
+@app.route('/stats/guide')
+def stats_guide():
+    return render_template('stats_guide.html')
 
 
 @app.route('/stats/rankings')

@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{% block title %}Stats - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<style>
+    .guide-section {
+        margin-bottom: 30px;
+    }
+    .guide-table th:first-child {
+        width: 180px;
+        white-space: nowrap;
+    }
+    .guide-table td:first-child {
+        font-weight: 600;
+        color: #2c3e50;
+        white-space: nowrap;
+    }
+    .guide-table td:last-child {
+        color: #555;
+        line-height: 1.5;
+    }
+    .stat-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.8em;
+        font-weight: 700;
+        color: #fff;
+        vertical-align: middle;
+        margin-left: 6px;
+    }
+    .section-icon {
+        font-size: 1.3em;
+        margin-right: 6px;
+    }
+    .formula {
+        background: #f0f4f8;
+        border-left: 3px solid #3498db;
+        padding: 4px 10px;
+        border-radius: 0 4px 4px 0;
+        font-family: monospace;
+        font-size: 0.92em;
+        display: inline-block;
+        margin-top: 4px;
+    }
+    @media (max-width: 600px) {
+        .guide-table th:first-child,
+        .guide-table td:first-child {
+            width: 120px;
+        }
+    }
+</style>
+
+<div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+    <a href="/leaderboard" class="btn">← Leaderboard</a>
+    <a href="/help" class="btn">❓ Help</a>
+</div>
+
+<div class="card">
+    <h1>📖 Stats</h1>
+    <p style="color: #7f8c8d;">A reference for every stat tracked on the leaderboard. All stats are based on the current year and exclude abandoned games.</p>
+</div>
+
+<!-- Stats Pages -->
+<div class="card guide-section">
+    <h2><span class="section-icon">📈</span>Stats Pages</h2>
+    <p style="color: #7f8c8d; margin-bottom: 15px;">Quick links and summaries of all stats pages accessible from the leaderboard.</p>
+    <table class="guide-table">
+        <thead>
+            <tr>
+                <th>Page</th>
+                <th>What it shows</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><a href="/stats/colors" style="color:#e91e63; font-weight:600;">🎨 Wins By Colour</a></td>
+                <td>Win rates broken down by team colour (pink vs yellow). Shows whether one colour tends to have an advantage and which colour each player wins more with.</td>
+            </tr>
+            <tr>
+                <td><a href="/stats/streaks" style="color:#e67e22; font-weight:600;">🔥 Streak Timeline</a></td>
+                <td>A visual timeline of each player's consecutive-win streaks across the year. Helps you spot hot runs and where they ended.</td>
+            </tr>
+            <tr>
+                <td><a href="/stats/synergy" style="color:#16a085; font-weight:600;">🤝 Synergy Matrix</a></td>
+                <td>A grid showing every pair of players and their combined win rate when on the same team. Useful for identifying strong or weak partnerships.</td>
+            </tr>
+            <tr>
+                <td><a href="/stats/rivals" style="color:#c0392b; font-weight:600;">⚔️ Rival Matrix</a></td>
+                <td>Shows head-to-head records when two players are on <em>opposing</em> teams. Find your nemesis or your favourite opponent to beat.</td>
+            </tr>
+            <tr>
+                <td><a href="/stats/h2h" style="color:#2e86c1; font-weight:600;">🆚 Head-to-Head</a></td>
+                <td>Pick any two players and see their full head-to-head breakdown — wins, draws, losses, and margins when they face each other.</td>
+            </tr>
+            <tr>
+                <td><a href="/stats/rankings" style="color:#8e44ad; font-weight:600;">📈 Rankings Timeline</a></td>
+                <td>An animated chart showing how each player's win-count ranking has changed week by week across the year.</td>
+            </tr>
+            <tr>
+                <td><a href="/stats/momentum" style="color:#d35400; font-weight:600;">🚀 Season Momentum</a></td>
+                <td>Plots a rolling performance score for each player over time, smoothing out luck to reveal genuine form trends. A rising line means you're improving.</td>
+            </tr>
+            <tr>
+                <td><a href="/stats/margins" style="color:#7d6608; font-weight:600;">📏 Score Margins</a></td>
+                <td>Analyses winning and losing goal margins for each player. Shows average margin of victory, average defeat, and biggest single-game swings.</td>
+            </tr>
+            <tr>
+                <td><a href="/stats/balance" style="color:#1f618d; font-weight:600;">👥 Uneven Teams</a></td>
+                <td>Breaks down uneven team-size games (such as 8v7) and shows whether the larger or smaller side tends to win.</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Win Leaderboard Columns -->
+<div class="card guide-section">
+    <h2><span class="section-icon">🏆</span>Win Leaderboard Columns</h2>
+    <p style="color: #7f8c8d; margin-bottom: 15px;">These columns appear in the Wins tab of the leaderboard. Click any column header there to sort by it.</p>
+    <table class="guide-table">
+        <thead>
+            <tr>
+                <th>Stat</th>
+                <th>What it means</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Rank</td>
+                <td>Your position in the leaderboard, ordered by wins (most wins first). Ties are broken by total games played.</td>
+            </tr>
+            <tr>
+                <td>Wins</td>
+                <td>Total games where your team scored more goals than the opposition this year. <span class="stat-badge" style="background:#27ae60;">W</span></td>
+            </tr>
+            <tr>
+                <td>Draws</td>
+                <td>Total games where both teams finished level. <span class="stat-badge" style="background:#95a5a6;">D</span></td>
+            </tr>
+            <tr>
+                <td>Losses</td>
+                <td>Total games where your team scored fewer goals than the opposition. <span class="stat-badge" style="background:#e74c3c;">L</span></td>
+            </tr>
+            <tr>
+                <td>Games</td>
+                <td>Total games with a final score that you participated in this year. Does not include games you attended but weren't on a team (e.g. late arrivals).</td>
+            </tr>
+            <tr>
+                <td>Form (L5)</td>
+                <td>Your last 5 results, displayed as coloured dots from oldest (left) to newest (right).
+                    <div style="margin-top: 6px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                        <span class="stat-badge" style="background:#27ae60; font-size:0.95em;">W</span> Win &nbsp;
+                        <span class="stat-badge" style="background:#95a5a6; font-size:0.95em;">D</span> Draw &nbsp;
+                        <span class="stat-badge" style="background:#e74c3c; font-size:0.95em;">L</span> Loss
+                    </div>
+                    <div style="margin-top:4px; color:#888; font-size:0.9em;">Only shows results from this year. Fewer than 5 dots means you haven't played 5 scored games yet.</div>
+                </td>
+            </tr>
+            <tr>
+                <td>Win %</td>
+                <td>Percentage of games played that were wins.
+                    <div class="formula">Wins ÷ Games × 100</div>
+                </td>
+            </tr>
+            <tr>
+                <td>Loss Ratio</td>
+                <td>Percentage of games played that were losses. Lower is better.
+                    <div class="formula">Losses ÷ Games × 100</div>
+                </td>
+            </tr>
+            <tr>
+                <td>Non-Loss Ratio</td>
+                <td>Percentage of games where you didn't lose — combines wins and draws. A measure of consistency.
+                    <div class="formula">(Wins + Draws) ÷ Games × 100</div>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Attendance Columns -->
+<div class="card guide-section">
+    <h2><span class="section-icon">📊</span>Attendance Leaderboard Columns</h2>
+    <p style="color: #7f8c8d; margin-bottom: 15px;">These columns appear in the Attendance tab. Tracks how often you show up, regardless of whether scores were recorded.</p>
+    <table class="guide-table">
+        <thead>
+            <tr>
+                <th>Stat</th>
+                <th>What it means</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Games Played</td>
+                <td>Number of non-abandoned games this year where you were marked as <em>playing</em>.</td>
+            </tr>
+            <tr>
+                <td>Attendance %</td>
+                <td>How often you showed up relative to the total number of non-abandoned games scheduled this year.
+                    <div class="formula">Games Played ÷ Total Sessions × 100</div>
+                    <div style="margin-top:4px; color:#888; font-size:0.9em;">Colour-coded: <span style="color:#155724; font-weight:600;">green ≥ 75%</span>, <span style="color:#856404; font-weight:600;">amber ≥ 50%</span>, <span style="color:#721c24; font-weight:600;">red &lt; 50%</span>.</div>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Summary Card Highlights -->
+<div class="card guide-section">
+    <h2><span class="section-icon">✨</span>Leaderboard Summary Highlights</h2>
+    <p style="color: #7f8c8d; margin-bottom: 15px;">These appear in the statistics card at the top of the leaderboard page.</p>
+    <table class="guide-table">
+        <thead>
+            <tr>
+                <th>Stat</th>
+                <th>What it means</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Games with Scores</td>
+                <td>Total number of non-abandoned games this year that have a final score recorded.</td>
+            </tr>
+            <tr>
+                <td>Players Tracked</td>
+                <td>Number of players who have played at least one scored game this year.</td>
+            </tr>
+            <tr>
+                <td>Best Active Streak</td>
+                <td>The longest current consecutive-win run belonging to any player right now. A streak resets the moment that player's team draws or loses.
+                    <a href="/stats/streaks" style="color:#e67e22; font-weight:600; display:block; margin-top:4px;">→ See full streak timeline</a>
+                </td>
+            </tr>
+            <tr>
+                <td>Top Synergy Pair</td>
+                <td>The pair of players with the highest win rate when they are on the <em>same</em> team, among pairs who have played together enough to be statistically meaningful.
+                    <div class="formula">Shared Wins ÷ Games Together × 100</div>
+                    <a href="/stats/synergy" style="color:#16a085; font-weight:600; display:block; margin-top:4px;">→ See full synergy matrix</a>
+                </td>
+            </tr>
+            <tr>
+                <td>Hottest Right Now</td>
+                <td>The player with the biggest positive momentum delta — meaning their recent form is significantly better than their season average. Shows how many rating points they have risen.
+                    <a href="/stats/momentum" style="color:#d35400; font-weight:600; display:block; margin-top:4px;">→ See season momentum chart</a>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}
