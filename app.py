@@ -108,7 +108,8 @@ def balance_score_stats():
                 balanced_game_count=0,
                 total_games=0,
                 best_balanced_games=[],
-                worst_balanced_games=[]
+                worst_balanced_games=[],
+                uneven_summary=None
             )
 
         game_ids = [game['id'] for game in games]
@@ -179,6 +180,48 @@ def balance_score_stats():
     best_balanced_games = balance_rows[:10]
     worst_balanced_games = list(reversed(balance_rows[-10:]))
 
+    uneven_games = [row for row in balance_rows if row['skill_favorite'] != 'Even']
+    uneven_summary = None
+    if uneven_games:
+        favorite_wins = favorite_draws = favorite_losses = 0
+        favorite_detail = {
+            'Team 1': {'games': 0, 'wins': 0, 'draws': 0, 'losses': 0},
+            'Team 2': {'games': 0, 'wins': 0, 'draws': 0, 'losses': 0}
+        }
+
+        for row in uneven_games:
+            if row['skill_favorite'] == 'Team 1':
+                favorite_detail['Team 1']['games'] += 1
+                if row['team1_score'] > row['team2_score']:
+                    favorite_wins += 1
+                    favorite_detail['Team 1']['wins'] += 1
+                elif row['team1_score'] < row['team2_score']:
+                    favorite_losses += 1
+                    favorite_detail['Team 1']['losses'] += 1
+                else:
+                    favorite_draws += 1
+                    favorite_detail['Team 1']['draws'] += 1
+            elif row['skill_favorite'] == 'Team 2':
+                favorite_detail['Team 2']['games'] += 1
+                if row['team2_score'] > row['team1_score']:
+                    favorite_wins += 1
+                    favorite_detail['Team 2']['wins'] += 1
+                elif row['team2_score'] < row['team1_score']:
+                    favorite_losses += 1
+                    favorite_detail['Team 2']['losses'] += 1
+                else:
+                    favorite_draws += 1
+                    favorite_detail['Team 2']['draws'] += 1
+
+        uneven_summary = {
+            'total_games': len(uneven_games),
+            'favorite_wins': favorite_wins,
+            'favorite_draws': favorite_draws,
+            'favorite_losses': favorite_losses,
+            'favorite_win_rate': round((favorite_wins / len(uneven_games)) * 100, 1) if uneven_games else 0.0,
+            'detail': favorite_detail
+        }
+
     return render_template(
         'stats_balance.html',
         year=current_year,
@@ -186,7 +229,8 @@ def balance_score_stats():
         balanced_game_count=balanced_game_count,
         total_games=total_games,
         best_balanced_games=best_balanced_games,
-        worst_balanced_games=worst_balanced_games
+        worst_balanced_games=worst_balanced_games,
+        uneven_summary=uneven_summary
     )
 
 

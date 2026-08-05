@@ -31,6 +31,57 @@
     <span class="badge" style="background: #7f8c8d;">{{ total_games }} scored games</span>
 </div>
 
+{% if uneven_summary %}
+<div class="card">
+    <h2>⚖️ Uneven games: who actually won?</h2>
+    <p style="color: #7f8c8d; margin-top: 6px; margin-bottom: 16px;">
+        When one side had the stronger skill total, the favored team won {{ uneven_summary.favorite_wins }} of {{ uneven_summary.total_games }} games ({{ uneven_summary.favorite_win_rate }}%).
+    </p>
+    <div class="grid">
+        <div class="stat">
+            <div class="stat-value">{{ uneven_summary.favorite_win_rate }}%</div>
+            <div class="stat-label">Favored team win rate</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value">{{ uneven_summary.favorite_wins }}</div>
+            <div class="stat-label">Favored team wins</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value">{{ uneven_summary.favorite_draws }}</div>
+            <div class="stat-label">Draws</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value">{{ uneven_summary.favorite_losses }}</div>
+            <div class="stat-label">Favored team losses</div>
+        </div>
+    </div>
+
+    <table style="margin-top: 16px;">
+        <thead>
+            <tr>
+                <th>Skill favorite</th>
+                <th>Games</th>
+                <th>Wins</th>
+                <th>Draws</th>
+                <th>Losses</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for team_name in ['Team 1', 'Team 2'] %}
+            {% set detail = uneven_summary.detail[team_name] %}
+            <tr>
+                <td><strong>{{ team_name }}</strong></td>
+                <td>{{ detail.games }}</td>
+                <td>{{ detail.wins }}</td>
+                <td>{{ detail.draws }}</td>
+                <td>{{ detail.losses }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 {% if best_balanced_games %}
 <div class="card">
     <h2>Most Balanced Games</h2>
