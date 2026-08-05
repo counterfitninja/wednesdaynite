@@ -54,12 +54,12 @@
     }
 </style>
 
-<div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+<div class="stats-nav">
     <a href="/leaderboard" class="btn" style="background: #27ae60;">🏆 Wins</a>
     <a href="/leaderboard?tab=attendance" class="btn" style="background: #3498db;">📊 Attendance</a>
     <a href="/stats/colors" class="btn" style="background: #e91e63;">🎨 Wins By Colour</a>
     <a href="/stats/streaks" class="btn" style="background: #e67e22;">🔥 Streak Timeline</a>
-    <a href="/stats/synergy" class="btn" style="background: #16a085; box-shadow: inset 0 0 0 2px #1f2d3a;">🤝 Synergy Matrix</a>
+    <a href="/stats/synergy" class="btn" style="background: #16a085; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.95);">🤝 Synergy Matrix</a>
     <a href="/stats/rivals" class="btn" style="background: #c0392b;">⚔️ Rival Matrix</a>
     <a href="/stats/h2h" class="btn" style="background: #2e86c1;">🆚 Head-to-Head</a>
     <a href="/stats/rankings" class="btn" style="background: #8e44ad;">📈 Rankings Timeline</a>
@@ -73,17 +73,17 @@
     <p style="color: #7f8c8d; margin-top: 6px;">
         Pair win-rate when two players are on the same team. Darker green means stronger partnership.
     </p>
-    <form method="get" action="{{ url_for('synergy_matrix') }}" style="margin-top: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-        <label for="player_limit" style="font-weight: 600; color: #2c3e50;">Players in matrix:</label>
-        <select id="player_limit" name="player_limit" onchange="this.form.submit()" style="padding: 6px 10px; border-radius: 8px; border: 1px solid #d0d7de;">
+    <form method="get" action="{{ url_for('synergy_matrix') }}" class="stats-filter">
+        <label for="player_limit">Players in matrix:</label>
+        <select id="player_limit" name="player_limit" onchange="this.form.submit()">
             <option value="all" {% if selected_player_limit is none %}selected{% endif %}>All</option>
             {% for limit in player_limit_options %}
             <option value="{{ limit }}" {% if selected_player_limit == limit %}selected{% endif %}>Top {{ limit }}</option>
             {% endfor %}
         </select>
 
-        <label for="min_games" style="font-weight: 600; color: #2c3e50;">Min pair games:</label>
-        <input id="min_games" type="number" min="1" max="30" name="min_games" value="{{ min_games }}" style="width: 90px; padding: 6px 10px; border-radius: 8px; border: 1px solid #d0d7de;">
+        <label for="min_games">Min pair games:</label>
+        <input id="min_games" type="number" min="1" max="30" name="min_games" value="{{ min_games }}" style="width: 90px;">
 
         <button type="submit" class="btn">Apply</button>
     </form>
@@ -161,3 +161,5 @@
 </div>
 {% endif %}
 {% endblock %}
+
+

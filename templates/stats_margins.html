@@ -3,7 +3,7 @@
 {% block title %}Score Margins - Wednesday Night FC{% endblock %}
 
 {% block content %}
-<div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+<div class="stats-nav">
     <a href="/leaderboard" class="btn" style="background: #27ae60;">🏆 Wins</a>
     <a href="/leaderboard?tab=attendance" class="btn" style="background: #3498db;">📊 Attendance</a>
     <a href="/stats/colors" class="btn" style="background: #e91e63;">🎨 Wins By Colour</a>
@@ -13,7 +13,7 @@
     <a href="/stats/h2h" class="btn" style="background: #2e86c1;">🆚 Head-to-Head</a>
     <a href="/stats/rankings" class="btn" style="background: #8e44ad;">📈 Rankings Timeline</a>
     <a href="/stats/momentum" class="btn" style="background: #d35400;">🚀 Season Momentum</a>
-    <a href="/stats/margins" class="btn" style="background: #7d6608; box-shadow: inset 0 0 0 2px #1f2d3a;">📏 Score Margins</a>
+    <a href="/stats/margins" class="btn" style="background: #7d6608; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.95);">📏 Score Margins</a>
     <a href="/stats/balance" class="btn" style="background: #1f618d;">👥 Uneven Teams</a>
 </div>
 
@@ -33,8 +33,8 @@
 {% if clinical_rows %}
 <div class="card">
     <h2>Clinical Ranking (Min {{ min_wins }} Wins)</h2>
-    <form method="get" action="/stats/margins" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0 16px 0;">
-        <label for="min_wins" style="font-weight: 600;">Minimum wins:</label>
+    <form method="get" action="/stats/margins" class="stats-filter" style="margin: 10px 0 16px 0;">
+        <label for="min_wins">Minimum wins:</label>
         <select id="min_wins" name="min_wins" onchange="this.form.submit()" style="max-width: 120px;">
             {% for opt in min_wins_options %}
             <option value="{{ opt }}" {% if min_wins == opt %}selected{% endif %}>{{ opt }}</option>
@@ -143,3 +143,5 @@
 </div>
 {% endif %}
 {% endblock %}
+
+

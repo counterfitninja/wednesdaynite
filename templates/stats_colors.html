@@ -3,10 +3,10 @@
 {% block title %}Wins By Colour - Wednesday Night FC{% endblock %}
 
 {% block content %}
-<div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+<div class="stats-nav">
     <a href="/leaderboard" class="btn" style="background: #27ae60;">🏆 Wins</a>
     <a href="/leaderboard?tab=attendance" class="btn" style="background: #3498db;">📊 Attendance</a>
-    <a href="/stats/colors" class="btn" style="background: #e91e63; box-shadow: inset 0 0 0 2px #1f2d3a;">🎨 Wins By Colour</a>
+    <a href="/stats/colors" class="btn" style="background: #e91e63; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.95);">🎨 Wins By Colour</a>
     <a href="/stats/streaks" class="btn" style="background: #e67e22;">🔥 Streak Timeline</a>
     <a href="/stats/synergy" class="btn" style="background: #16a085;">🤝 Synergy Matrix</a>
     <a href="/stats/rivals" class="btn" style="background: #c0392b;">⚔️ Rival Matrix</a>
@@ -165,3 +165,5 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 {% endblock %}
+
+
