@@ -159,6 +159,16 @@ def balance_score_stats():
         else:
             skill_favorite = 'Team 2'
 
+        team1_player_count = len(team1_players)
+        team2_player_count = len(team2_players)
+        player_count_gap = abs(team1_player_count - team2_player_count)
+        if team1_player_count == team2_player_count:
+            player_count_favorite = 'Even'
+        elif team1_player_count > team2_player_count:
+            player_count_favorite = 'Team 1'
+        else:
+            player_count_favorite = 'Team 2'
+
         balance_rows.append({
             'game_id': game['id'],
             'date': game['date'],
@@ -169,7 +179,11 @@ def balance_score_stats():
             'team1_score': game['team1_score'],
             'team2_score': game['team2_score'],
             'result_label': result_label,
-            'skill_favorite': skill_favorite
+            'skill_favorite': skill_favorite,
+            'team1_player_count': team1_player_count,
+            'team2_player_count': team2_player_count,
+            'player_count_gap': player_count_gap,
+            'player_count_favorite': player_count_favorite
         })
 
     balance_rows.sort(key=lambda row: (-row['balance_score'], row['skill_gap'], row['date']))
@@ -180,46 +194,34 @@ def balance_score_stats():
     best_balanced_games = balance_rows[:10]
     worst_balanced_games = list(reversed(balance_rows[-10:]))
 
-    uneven_games = [row for row in balance_rows if row['skill_favorite'] != 'Even']
+    uneven_player_count_games = [row for row in balance_rows if row['player_count_favorite'] != 'Even']
     uneven_summary = None
-    if uneven_games:
-        favorite_wins = favorite_draws = favorite_losses = 0
-        favorite_detail = {
-            'Team 1': {'games': 0, 'wins': 0, 'draws': 0, 'losses': 0},
-            'Team 2': {'games': 0, 'wins': 0, 'draws': 0, 'losses': 0}
-        }
+    if uneven_player_count_games:
+        team1_more_players = {'games': 0, 'wins': 0, 'draws': 0, 'losses': 0}
+        team2_more_players = {'games': 0, 'wins': 0, 'draws': 0, 'losses': 0}
 
-        for row in uneven_games:
-            if row['skill_favorite'] == 'Team 1':
-                favorite_detail['Team 1']['games'] += 1
+        for row in uneven_player_count_games:
+            if row['player_count_favorite'] == 'Team 1':
+                team1_more_players['games'] += 1
                 if row['team1_score'] > row['team2_score']:
-                    favorite_wins += 1
-                    favorite_detail['Team 1']['wins'] += 1
+                    team1_more_players['wins'] += 1
                 elif row['team1_score'] < row['team2_score']:
-                    favorite_losses += 1
-                    favorite_detail['Team 1']['losses'] += 1
+                    team1_more_players['losses'] += 1
                 else:
-                    favorite_draws += 1
-                    favorite_detail['Team 1']['draws'] += 1
-            elif row['skill_favorite'] == 'Team 2':
-                favorite_detail['Team 2']['games'] += 1
+                    team1_more_players['draws'] += 1
+            elif row['player_count_favorite'] == 'Team 2':
+                team2_more_players['games'] += 1
                 if row['team2_score'] > row['team1_score']:
-                    favorite_wins += 1
-                    favorite_detail['Team 2']['wins'] += 1
+                    team2_more_players['wins'] += 1
                 elif row['team2_score'] < row['team1_score']:
-                    favorite_losses += 1
-                    favorite_detail['Team 2']['losses'] += 1
+                    team2_more_players['losses'] += 1
                 else:
-                    favorite_draws += 1
-                    favorite_detail['Team 2']['draws'] += 1
+                    team2_more_players['draws'] += 1
 
         uneven_summary = {
-            'total_games': len(uneven_games),
-            'favorite_wins': favorite_wins,
-            'favorite_draws': favorite_draws,
-            'favorite_losses': favorite_losses,
-            'favorite_win_rate': round((favorite_wins / len(uneven_games)) * 100, 1) if uneven_games else 0.0,
-            'detail': favorite_detail
+            'total_games': len(uneven_player_count_games),
+            'team1_more_players': team1_more_players,
+            'team2_more_players': team2_more_players
         }
 
     return render_template(
