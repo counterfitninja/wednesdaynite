@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}PayPal Check - {{ player.name }} - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+    <h1>PayPal Check - {{ player.name }}</h1>
+    <div>
+        <a href="/payments/paypal-check" class="btn">← Back to PayPal Check</a>
+        <a href="/players/{{ player.id }}/payments" class="btn">Payment History</a>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom: 15px;">
+    <p style="margin: 0; color: #7f8c8d;">
+        Weekly rate: <strong>£{{ "%.2f"|format(weekly_payment_amount) }}</strong> •
+        {% if flagged > 0 %}
+        <span style="color: #e67e22; font-weight: 700;">{{ flagged }} week(s) look paid via PayPal but are still marked unpaid.</span>
+        {% else %}
+        <span style="color: #27ae60; font-weight: 700;">No mismatches found.</span>
+        {% endif %}
+    </p>
+</div>
+
+<div class="card">
+    <h2>Weeks</h2>
+    {% if weeks %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Location</th>
+                <th>App Status</th>
+                <th>PayPal Cross-Check</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for week in weeks %}
+            <tr {% if week.mismatch %}style="background-color: #fdf2e3;"{% endif %}>
+                <td><strong>{{ week.date|ukdate }}</strong></td>
+                <td>{{ week.location or 'N/A' }}</td>
+                <td>
+                    {% if week.paid %}
+                    <span class="badge" style="background-color: #27ae60;">Paid</span>
+                    {% else %}
+                    <span class="badge" style="background-color: #e74c3c;">Unpaid</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if week.paypal_match %}
+                    <span class="badge" style="background-color: #e67e22;">Review</span>
+                    £{{ "%.2f"|format(week.paypal_match.amount) }} on {{ week.paypal_match.txn_date|ukdate }}
+                    {% elif week.paid %}
+                    <span style="color: #7f8c8d;">—</span>
+                    {% else %}
+                    <span style="color: #7f8c8d;">No matching PayPal payment found</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No playing attendance records found for this player yet.</p>
+    {% endif %}
+</div>
+
+<div class="card" style="margin-top: 15px;">
+    <h2>PayPal Transactions</h2>
+    {% if transactions %}
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Allocation</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for txn in transactions %}
+            <tr>
+                <td>{{ txn.txn_date|ukdate }}</td>
+                <td>£{{ "%.2f"|format(txn.amount) }}</td>
+                <td>{{ txn.status or 'N/A' }}</td>
+                <td>
+                    {% set leftover = unallocated|selectattr('transaction.id', 'equalto', txn.id)|list %}
+                    {% if leftover %}
+                    <span class="badge" style="background-color: #3498db;">£{{ "%.2f"|format(leftover[0].remaining) }} unallocated</span>
+                    {% else %}
+                    <span class="badge" style="background-color: #27ae60;">Fully allocated</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No PayPal transactions matched to this player yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

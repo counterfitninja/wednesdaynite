@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}PayPal Import - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+    <h1>Import PayPal Payments</h1>
+    <a href="/payments/paypal-check" class="btn">← Back to PayPal Check</a>
+</div>
+
+{% if error %}
+<div class="card" style="border-left: 4px solid #e74c3c; margin-bottom: 15px;">
+    <p style="margin: 0; color: #e74c3c;">{{ error }}</p>
+</div>
+{% endif %}
+
+{% if success %}
+<div class="card" style="border-left: 4px solid #27ae60; margin-bottom: 15px;">
+    <p style="margin: 0; color: #27ae60;">{{ success }}</p>
+</div>
+{% endif %}
+
+<div class="card">
+    <p style="color: #7f8c8d;">
+        Export your PayPal activity as a CSV (Activity &rarr; Statements &rarr; Download report &rarr; Transaction detail)
+        and upload it here. Transactions are matched to players by email first, then by name, and can be reassigned
+        manually from the PayPal Check page. Re-uploading the same file won't create duplicates.
+    </p>
+    <form method="POST" enctype="multipart/form-data">
+        <div style="margin-bottom: 15px;">
+            <label for="file">PayPal CSV file</label>
+            <input type="file" id="file" name="file" accept=".csv" required>
+        </div>
+        <button type="submit" class="btn">Upload &amp; Import</button>
+    </form>
+</div>
+{% endblock %}
