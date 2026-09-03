@@ -8,7 +8,8 @@ import base64
 import re
 from functools import wraps
 import html
-from io import BytesIO
+from io import BytesIO, StringIO
+import csv
 from PIL import Image, ImageDraw, ImageFont, UnidentifiedImageError
 
 try:
@@ -2582,6 +2583,42 @@ def outstanding_payments():
         sort=sort,
         public=False
     )
+
+@app.route('/payments/export.csv')
+@login_required
+def export_payments_csv():
+    with get_db() as conn:
+        rows = conn.execute('''
+            SELECT
+                p.name,
+                p.alias,
+                g.date,
+                g.location,
+                COALESCE(a.paid, 0) as paid
+            FROM attendance a
+            JOIN players p ON p.id = a.player_id
+            JOIN games g ON g.id = a.game_id
+            WHERE a.status = 'playing'
+              AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+            ORDER BY p.name, g.date
+        ''').fetchall()
+
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Player', 'Alias', 'Date', 'Location', 'Paid'])
+    for row in rows:
+        writer.writerow([
+            row['name'],
+            row['alias'] or '',
+            row['date'],
+            row['location'] or '',
+            'Yes' if row['paid'] else 'No'
+        ])
+
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'text/csv'
+    response.headers['Content-Disposition'] = 'attachment; filename=player_payment_dates.csv'
+    return response
 
 def _get_or_create_player_share_token(conn, player_id):
     row = conn.execute(
