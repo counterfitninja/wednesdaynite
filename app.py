@@ -2571,66 +2571,16 @@ def outstanding_payments():
     outstanding, weekly_payment_amount = _get_outstanding_payments_data(sort)
 
     with get_db() as conn:
-        token_row = conn.execute(
-            "SELECT value FROM settings WHERE key = 'payments_share_token'"
-        ).fetchone()
-        share_token = token_row['value'] if token_row else None
-        if not share_token:
-            share_token = secrets.token_urlsafe(24)
-            conn.execute(
-                "INSERT OR REPLACE INTO settings (key, value) VALUES ('payments_share_token', ?)",
-                (share_token,)
-            )
-            conn.commit()
-
         for player in outstanding:
             player_token = _get_or_create_player_share_token(conn, player['id'])
             player['share_url'] = request.host_url.rstrip('/') + url_for('shared_player_payments', token=player_token)
 
-    share_url = request.host_url.rstrip('/') + url_for('shared_outstanding_payments', token=share_token)
-
     return render_template(
         'outstanding_payments.html',
         outstanding=outstanding,
         weekly_payment_amount=weekly_payment_amount,
         sort=sort,
-        share_url=share_url,
         public=False
-    )
-
-@app.route('/payments/outstanding/share/regenerate', methods=['POST'])
-@login_required
-def regenerate_outstanding_payments_share_link():
-    new_token = secrets.token_urlsafe(24)
-    with get_db() as conn:
-        conn.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES ('payments_share_token', ?)",
-            (new_token,)
-        )
-        conn.commit()
-    return redirect(url_for('outstanding_payments'))
-
-@app.route('/payments/shared/<token>')
-def shared_outstanding_payments(token):
-    sort = request.args.get('sort', 'name')
-
-    with get_db() as conn:
-        token_row = conn.execute(
-            "SELECT value FROM settings WHERE key = 'payments_share_token'"
-        ).fetchone()
-
-    if not token_row or not token_row['value'] or not secrets.compare_digest(token_row['value'], token):
-        return "Not found", 404
-
-    outstanding, weekly_payment_amount = _get_outstanding_payments_data(sort)
-
-    return render_template(
-        'outstanding_payments.html',
-        outstanding=outstanding,
-        weekly_payment_amount=weekly_payment_amount,
-        sort=sort,
-        share_url=None,
-        public=True
     )
 
 def _get_or_create_player_share_token(conn, player_id):

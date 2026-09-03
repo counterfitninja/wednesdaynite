@@ -46,16 +46,26 @@
         
         nav {
             display: flex;
-            gap: 20px;
+            align-items: center;
+            gap: 8px;
             margin-top: 15px;
+            flex-wrap: wrap;
         }
         
         nav a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             color: white;
             text-decoration: none;
-            padding: 8px 16px;
+            min-height: 40px;
+            padding: 8px 14px;
             border-radius: 4px;
-            transition: background 0.3s;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(255, 255, 255, 0.08);
+            font-size: 0.95em;
+            font-weight: 600;
+            transition: background 0.2s, border-color 0.2s;
         }
 
         nav a:visited,
@@ -65,28 +75,38 @@
         
         nav a:hover {
             background: #34495e;
+            border-color: rgba(255, 255, 255, 0.4);
         }
         
         .menu-toggle {
             display: none;
-            background: none;
-            border: none;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.3);
             color: white;
-            font-size: 1.5em;
+            font-size: 0.95em;
+            font-weight: 600;
             cursor: pointer;
-            padding: 8px;
+            min-height: 40px;
+            padding: 8px 14px;
+            border-radius: 4px;
             margin-top: 10px;
+        }
+
+        .menu-toggle:hover {
+            background: #34495e;
+            border-color: rgba(255, 255, 255, 0.5);
         }
         
         @media (max-width: 768px) {
             nav {
                 display: none;
                 flex-direction: column;
-                gap: 0;
+                align-items: stretch;
+                gap: 6px;
                 margin-top: 10px;
+                padding: 8px;
                 background: #34495e;
                 border-radius: 4px;
-                overflow: hidden;
             }
             
             nav.active {
@@ -95,12 +115,7 @@
             
             nav a {
                 padding: 12px 16px;
-                border-radius: 0;
-                border-bottom: 1px solid #2c3e50;
-            }
-            
-            nav a:last-child {
-                border-bottom: none;
+                border-radius: 4px;
             }
             
             .menu-toggle {
@@ -511,25 +526,25 @@
                     <img src="{{ url_for('static', filename='wn.png') }}" alt="Wednesday Night FC Logo" style="height: 44px; width: auto;">
                     <h1>Wednesday Night FC</h1>
                 </div>
-                <button class="menu-toggle" onclick="toggleMenu()" aria-label="Toggle menu">☰</button>
+                <button class="menu-toggle" onclick="toggleMenu()" aria-label="Toggle menu">Menu</button>
             </div>
             <nav id="main-nav">
                 <a href="/">Games</a>
-                <a href="/leaderboard">🏆 Leaderboard</a>
-                <a href="/stats/guide">📖 Stats</a>
+                <a href="/leaderboard">Leaderboard</a>
+                <a href="/stats/guide">Stats</a>
                 {% if stickers_enabled %}
-                <a href="/stickers">🟨 Stickers</a>
+                <a href="/stickers">Stickers</a>
                 {% endif %}
-                <a href="/team-balancer">⚖️ Team Balancer</a>
-                <a href="/help">❓ Help</a>
+                <a href="/team-balancer">Team Balancer</a>
+                <a href="/help">Help</a>
                 {% if session.logged_in %}
                 {% if final_score_game_id %}
-                <a href="{{ url_for('edit_game', game_id=final_score_game_id) }}">⚽ Final score</a>
+                <a href="{{ url_for('edit_game', game_id=final_score_game_id) }}">Final score</a>
                 {% endif %}
                 <a href="/players">Players</a>
-                <a href="/payments/outstanding">💰 Payments</a>
+                <a href="/payments/outstanding">Payments</a>
                 <a href="/admin/games">Teams</a>
-                <a href="/admin/settings">⚙️ Settings</a>
+                <a href="/admin/settings">Settings</a>
                 <a href="/logout" style="color: #e74c3c;">Logout</a>
                 {% endif %}
             </nav>

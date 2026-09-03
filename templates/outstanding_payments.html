@@ -16,33 +16,10 @@
         Players with unpaid weeks: <strong>{{ outstanding|length }}</strong>
     </p>
     <div class="stats-nav">
-        <a href="{{ '/payments/shared/' + request.view_args.token if public else '/payments/outstanding' }}?sort=name" class="btn {% if sort == 'name' %}active{% endif %}">Sort by Player</a>
-        <a href="{{ '/payments/shared/' + request.view_args.token if public else '/payments/outstanding' }}?sort=owed" class="btn {% if sort == 'owed' %}active{% endif %}">Sort by Amount Owed</a>
+        <a href="/payments/outstanding?sort=name" class="btn {% if sort == 'name' %}active{% endif %}">Sort by Player</a>
+        <a href="/payments/outstanding?sort=owed" class="btn {% if sort == 'owed' %}active{% endif %}">Sort by Amount Owed</a>
     </div>
 </div>
-
-{% if not public and share_url %}
-<div class="card" style="margin-bottom: 15px;">
-    <p style="margin: 0 0 10px 0; font-weight: 700; color: #1f2d3a;">Share this list</p>
-    <p style="margin: 0 0 10px 0; color: #7f8c8d; font-size: 0.9em;">Anyone with this link can view (read-only). It's not linked from anywhere public, so only people you send it to will find it.</p>
-    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-        <input id="share-link-input" type="text" readonly value="{{ share_url }}" style="flex: 1; min-width: 220px; padding: 10px 12px; border-radius: 8px; border: 1px solid #b8c2cc;">
-        <button type="button" class="btn" onclick="copyShareLink()">Copy Link</button>
-        <a class="btn" style="background-color: #25D366;" target="_blank" rel="noopener" href="https://wa.me/?text={{ ('Outstanding payments: ' + share_url) | urlencode }}">Share on WhatsApp</a>
-        <form method="POST" action="/payments/outstanding/share/regenerate" onsubmit="return confirm('This will invalidate the old link. Continue?');">
-            <button type="submit" class="btn" style="background-color: #e74c3c;">Revoke &amp; Regenerate</button>
-        </form>
-    </div>
-</div>
-<script>
-function copyShareLink() {
-    const input = document.getElementById('share-link-input');
-    input.select();
-    input.setSelectionRange(0, 99999);
-    navigator.clipboard.writeText(input.value).catch(() => document.execCommand('copy'));
-}
-</script>
-{% endif %}
 
 {% if outstanding %}
     {% for player in outstanding %}
