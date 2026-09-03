@@ -3,6 +3,55 @@
 {% block title %}Image Share Import - Wednesday Night FC{% endblock %}
 
 {% block content %}
+<style>
+    .share-import-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 20px;
+    }
+
+    .share-import-grid > .card {
+        min-width: 0;
+    }
+
+    .ocr-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .ocr-actions .btn {
+        width: 100%;
+    }
+
+    .shared-image-preview {
+        display: block;
+        width: 100%;
+        max-height: 65vh;
+        object-fit: contain;
+        border-radius: 6px;
+        border: 1px solid #ddd;
+    }
+
+    @media (max-width: 768px) {
+        .share-import-grid {
+            grid-template-columns: 1fr !important;
+            gap: 12px;
+        }
+
+        .ocr-actions {
+            grid-template-columns: 1fr;
+        }
+
+        .ocr-actions .btn,
+        .share-import-submit,
+        .attendance-submit {
+            display: flex !important;
+            width: 100%;
+        }
+    }
+</style>
+
 <a href="/" class="btn" style="margin-bottom: 20px;">← Back to Games</a>
 
 <div class="card">
@@ -31,15 +80,15 @@
             <p style="color: #7f8c8d; font-size: 0.9em; margin-top: 6px;">If no image is available, text-only extraction can still help.</p>
         </div>
 
-        <button type="submit" class="btn btn-success">Load for Extraction</button>
+        <button type="submit" class="btn btn-success share-import-submit">Load for Extraction</button>
     </form>
 </div>
 
-<div class="grid" style="grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 20px;">
+<div class="grid share-import-grid">
     <div class="card">
         <h2>2) Preview</h2>
         {% if image_data_url %}
-        <img id="shared-image" src="{{ image_data_url }}" alt="Shared player list" style="width: 100%; border-radius: 6px; border: 1px solid #ddd;">
+        <img id="shared-image" src="{{ image_data_url }}" alt="Shared player list" class="shared-image-preview">
         {% else %}
         <p style="color: #7f8c8d;">No image loaded yet. Upload an image above or share one from WhatsApp.</p>
         {% endif %}
@@ -47,7 +96,7 @@
 
     <div class="card">
         <h2>3) Extract Names</h2>
-        <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
+        <div class="ocr-actions">
             <button type="button" id="extract-btn" class="btn">Extract From Image</button>
             <button type="button" id="extract-server-btn" class="btn" style="background: #455a64;">Extract On Server</button>
             <button type="button" id="extract-text-btn" class="btn" style="background: #607d8b;">Extract From Text</button>
@@ -55,6 +104,12 @@
         </div>
 
         <p style="color: #7f8c8d; font-size: 0.9em; margin-bottom: 12px;">If browser extraction is unavailable, the app will automatically try server OCR.</p>
+
+        <div class="form-group">
+            <label for="ignored_text">Ignore OCR Text</label>
+            <textarea id="ignored_text" placeholder="One exact name or label per line"></textarea>
+            <p style="color: #7f8c8d; font-size: 0.9em; margin-top: 6px;">Ignored entries are not added from image or shared-text extraction. This list is saved on this device.</p>
+        </div>
 
         <div id="extract-status" style="display: none; margin-bottom: 12px; padding: 10px; border-radius: 4px;"></div>
 
@@ -78,7 +133,7 @@
                 <p style="color: #7f8c8d; font-size: 0.9em; margin-top: 6px;">Quick check before submit: remove anyone who is not actually playing.</p>
             </div>
 
-            <button type="submit" class="btn btn-success">✅ Mark as Playing</button>
+            <button type="submit" class="btn btn-success attendance-submit">✅ Mark as Playing</button>
         </form>
     </div>
 </div>
@@ -89,6 +144,7 @@
     const attendanceForm = document.getElementById('attendance-form');
     const image = document.getElementById('shared-image');
     const sharedText = document.getElementById('text');
+    const ignoredText = document.getElementById('ignored_text');
     const playersTextarea = document.getElementById('players_text');
     const extractStatus = document.getElementById('extract-status');
     const extractBtn = document.getElementById('extract-btn');
@@ -96,6 +152,7 @@
     const extractTextBtn = document.getElementById('extract-text-btn');
     const clearBtn = document.getElementById('clear-btn');
     const imageDataUrl = {{ image_data_url|tojson }};
+    const ignoredTextStorageKey = 'wnfc-ocr-ignored-text';
 
     const stopWords = new Set([
         'yes', 'no', 'maybe', 'responded', 'response', 'responses', 'poll', 'vote', 'votes',
@@ -161,13 +218,24 @@
         return value;
     }
 
+    function ignoredCandidates() {
+        return new Set(
+            String(ignoredText.value || '')
+                .split(/\r?\n/)
+                .map(cleanCandidate)
+                .filter(Boolean)
+                .map(value => value.toLowerCase())
+        );
+    }
+
     function extractNamesFromText(rawText) {
         const lines = String(rawText || '').split(/\r?\n/);
         const unique = new Map();
+        const ignored = ignoredCandidates();
 
         lines.forEach(line => {
             const candidate = cleanCandidate(line);
-            if (!candidate) {
+            if (!candidate || ignored.has(candidate.toLowerCase())) {
                 return;
             }
             const key = candidate.toLowerCase();
@@ -259,7 +327,10 @@
                     'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest'
                 },
-                body: JSON.stringify({ image_data_url: imageDataUrl })
+                body: JSON.stringify({
+                    image_data_url: imageDataUrl,
+                    ignored_text: ignoredText.value
+                })
             });
 
             const data = await response.json();
@@ -298,6 +369,10 @@
     }
 
     gameSelect.addEventListener('change', updateAttendanceAction);
+    ignoredText.value = localStorage.getItem(ignoredTextStorageKey) || '';
+    ignoredText.addEventListener('input', () => {
+        localStorage.setItem(ignoredTextStorageKey, ignoredText.value);
+    });
     extractBtn.addEventListener('click', extractFromImage);
     extractServerBtn.addEventListener('click', () => extractFromServer());
     extractTextBtn.addEventListener('click', extractFromSharedText);

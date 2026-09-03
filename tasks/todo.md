@@ -1,3 +1,14 @@
+# OCR Import Mobile and Ignore Text
+
+- [x] Identify the image-share OCR workflow and its extraction paths.
+- [x] Stack the preview and extraction panels on smaller screens and make controls easy to tap.
+- [x] Add a persistent, configurable exact-match ignore list for browser, server, and text extraction.
+- [x] Run focused validation and review the final diff.
+
+## Review
+
+- Validation: `python -m py_compile app.py` passed; focused candidate-filtering check passed; editor diagnostics and `git diff --check` are clean.
+
 # Admin Games Unpaid Count
 
 - [x] Reuse existing payment rules to calculate unpaid playing players per game.

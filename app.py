@@ -607,6 +607,14 @@ def extract_name_candidates_from_text(raw_text):
     return list(unique.values())
 
 
+def ignored_name_candidates(raw_text):
+    return {
+        candidate.casefold()
+        for line in str(raw_text or '').splitlines()
+        if (candidate := clean_name_candidate(line))
+    }
+
+
 def decode_data_url_image(image_data_url):
     if not image_data_url or ',' not in image_data_url:
         raise ValueError('Invalid image data.')
@@ -3932,6 +3940,7 @@ def share_target():
 def api_ocr_extract_names():
     payload = request.get_json(silent=True) or {}
     image_data_url = payload.get('image_data_url')
+    ignored_names = ignored_name_candidates(payload.get('ignored_text'))
 
     if not image_data_url:
         return jsonify({'ok': False, 'error': 'Missing image data.'}), 400
@@ -3939,6 +3948,7 @@ def api_ocr_extract_names():
     try:
         raw_bytes = decode_data_url_image(image_data_url)
         names = extract_names_via_server_ocr(raw_bytes)
+        names = [name for name in names if name.casefold() not in ignored_names]
     except ValueError as exc:
         return jsonify({'ok': False, 'error': str(exc)}), 400
     except RuntimeError as exc:
