@@ -3,6 +3,7 @@ import sqlite3
 from datetime import datetime, timedelta
 import os
 import random
+import secrets
 import base64
 import re
 from functools import wraps
@@ -1193,6 +1194,15 @@ def init_db():
                 name TEXT NOT NULL UNIQUE,
                 position TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS player_share_tokens (
+                player_id INTEGER PRIMARY KEY,
+                token TEXT UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (player_id) REFERENCES players(id)
             )
         ''')
         
@@ -2503,11 +2513,7 @@ def edit_player(player_id):
         return render_template('edit_player.html', player=player, face_url=get_player_face_url(player_id))
     return render_template('add_player.html')
 
-@app.route('/payments/outstanding')
-@login_required
-def outstanding_payments():
-    sort = request.args.get('sort', 'name')
-
+def _get_outstanding_payments_data(sort):
     with get_db() as conn:
         payment_setting = conn.execute(
             "SELECT value FROM settings WHERE key = 'weekly_payment_amount'"
@@ -2556,12 +2562,120 @@ def outstanding_payments():
     else:
         outstanding.sort(key=lambda p: p['name'].lower())
 
+    return outstanding, weekly_payment_amount
+
+@app.route('/payments/outstanding')
+@login_required
+def outstanding_payments():
+    sort = request.args.get('sort', 'name')
+    outstanding, weekly_payment_amount = _get_outstanding_payments_data(sort)
+
+    with get_db() as conn:
+        token_row = conn.execute(
+            "SELECT value FROM settings WHERE key = 'payments_share_token'"
+        ).fetchone()
+        share_token = token_row['value'] if token_row else None
+        if not share_token:
+            share_token = secrets.token_urlsafe(24)
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('payments_share_token', ?)",
+                (share_token,)
+            )
+            conn.commit()
+
+        for player in outstanding:
+            player_token = _get_or_create_player_share_token(conn, player['id'])
+            player['share_url'] = request.host_url.rstrip('/') + url_for('shared_player_payments', token=player_token)
+
+    share_url = request.host_url.rstrip('/') + url_for('shared_outstanding_payments', token=share_token)
+
     return render_template(
         'outstanding_payments.html',
         outstanding=outstanding,
         weekly_payment_amount=weekly_payment_amount,
-        sort=sort
+        sort=sort,
+        share_url=share_url,
+        public=False
     )
+
+@app.route('/payments/outstanding/share/regenerate', methods=['POST'])
+@login_required
+def regenerate_outstanding_payments_share_link():
+    new_token = secrets.token_urlsafe(24)
+    with get_db() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('payments_share_token', ?)",
+            (new_token,)
+        )
+        conn.commit()
+    return redirect(url_for('outstanding_payments'))
+
+@app.route('/payments/shared/<token>')
+def shared_outstanding_payments(token):
+    sort = request.args.get('sort', 'name')
+
+    with get_db() as conn:
+        token_row = conn.execute(
+            "SELECT value FROM settings WHERE key = 'payments_share_token'"
+        ).fetchone()
+
+    if not token_row or not token_row['value'] or not secrets.compare_digest(token_row['value'], token):
+        return "Not found", 404
+
+    outstanding, weekly_payment_amount = _get_outstanding_payments_data(sort)
+
+    return render_template(
+        'outstanding_payments.html',
+        outstanding=outstanding,
+        weekly_payment_amount=weekly_payment_amount,
+        sort=sort,
+        share_url=None,
+        public=True
+    )
+
+def _get_or_create_player_share_token(conn, player_id):
+    row = conn.execute(
+        'SELECT token FROM player_share_tokens WHERE player_id = ?', (player_id,)
+    ).fetchone()
+    if row:
+        return row['token']
+    token = secrets.token_urlsafe(24)
+    conn.execute(
+        'INSERT INTO player_share_tokens (player_id, token) VALUES (?, ?)',
+        (player_id, token)
+    )
+    conn.commit()
+    return token
+
+def _get_player_payments_data(conn, player_id):
+    payment_setting = conn.execute(
+        "SELECT value FROM settings WHERE key = 'weekly_payment_amount'"
+    ).fetchone()
+    try:
+        weekly_payment_amount = float(payment_setting['value']) if payment_setting and payment_setting['value'] is not None else 0.0
+    except (TypeError, ValueError):
+        weekly_payment_amount = 0.0
+
+    weeks = conn.execute('''
+        SELECT
+            a.id as attendance_id,
+            a.game_id,
+            COALESCE(a.paid, 0) as paid,
+            g.date,
+            g.location
+        FROM attendance a
+        JOIN games g ON a.game_id = g.id
+        WHERE a.player_id = ?
+          AND a.status = 'playing'
+          AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+        ORDER BY g.date DESC
+    ''', (player_id,)).fetchall()
+
+    total_weeks = len(weeks)
+    paid_weeks = sum(1 for week in weeks if week['paid'])
+    total_paid_amount = round(paid_weeks * weekly_payment_amount, 2)
+
+    return weeks, total_weeks, paid_weeks, weekly_payment_amount, total_paid_amount
 
 @app.route('/players/<int:player_id>/payments', methods=['GET', 'POST'])
 @login_required
@@ -2585,32 +2699,10 @@ def player_payments(player_id):
 
             return redirect(url_for('player_payments', player_id=player_id))
 
-        payment_setting = conn.execute(
-            "SELECT value FROM settings WHERE key = 'weekly_payment_amount'"
-        ).fetchone()
-        try:
-            weekly_payment_amount = float(payment_setting['value']) if payment_setting and payment_setting['value'] is not None else 0.0
-        except (TypeError, ValueError):
-            weekly_payment_amount = 0.0
+        weeks, total_weeks, paid_weeks, weekly_payment_amount, total_paid_amount = _get_player_payments_data(conn, player_id)
+        share_token = _get_or_create_player_share_token(conn, player_id)
 
-        weeks = conn.execute('''
-            SELECT
-                a.id as attendance_id,
-                a.game_id,
-                COALESCE(a.paid, 0) as paid,
-                g.date,
-                g.location
-            FROM attendance a
-            JOIN games g ON a.game_id = g.id
-            WHERE a.player_id = ?
-              AND a.status = 'playing'
-              AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
-            ORDER BY g.date DESC
-        ''', (player_id,)).fetchall()
-
-    total_weeks = len(weeks)
-    paid_weeks = sum(1 for week in weeks if week['paid'])
-    total_paid_amount = round(paid_weeks * weekly_payment_amount, 2)
+    share_url = request.host_url.rstrip('/') + url_for('shared_player_payments', token=share_token)
 
     return render_template(
         'player_payments.html',
@@ -2619,7 +2711,49 @@ def player_payments(player_id):
         total_weeks=total_weeks,
         paid_weeks=paid_weeks,
         weekly_payment_amount=weekly_payment_amount,
-        total_paid_amount=total_paid_amount
+        total_paid_amount=total_paid_amount,
+        share_url=share_url,
+        public=False
+    )
+
+@app.route('/players/<int:player_id>/payments/share/regenerate', methods=['POST'])
+@login_required
+def regenerate_player_payments_share_link(player_id):
+    new_token = secrets.token_urlsafe(24)
+    with get_db() as conn:
+        conn.execute(
+            'INSERT INTO player_share_tokens (player_id, token) VALUES (?, ?) '
+            'ON CONFLICT(player_id) DO UPDATE SET token = excluded.token',
+            (player_id, new_token)
+        )
+        conn.commit()
+    return redirect(url_for('player_payments', player_id=player_id))
+
+@app.route('/payments/player/shared/<token>')
+def shared_player_payments(token):
+    with get_db() as conn:
+        token_row = conn.execute(
+            'SELECT player_id FROM player_share_tokens WHERE token = ?', (token,)
+        ).fetchone()
+        if not token_row:
+            return "Not found", 404
+
+        player = conn.execute('SELECT * FROM players WHERE id = ?', (token_row['player_id'],)).fetchone()
+        if not player:
+            return "Not found", 404
+
+        weeks, total_weeks, paid_weeks, weekly_payment_amount, total_paid_amount = _get_player_payments_data(conn, player['id'])
+
+    return render_template(
+        'player_payments.html',
+        player=player,
+        weeks=weeks,
+        total_weeks=total_weeks,
+        paid_weeks=paid_weeks,
+        weekly_payment_amount=weekly_payment_amount,
+        total_paid_amount=total_paid_amount,
+        share_url=None,
+        public=True
     )
 
 @app.route('/players/<int:player_id>/delete', methods=['POST'])

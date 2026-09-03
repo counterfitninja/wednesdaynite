@@ -5,7 +5,9 @@
 {% block content %}
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
     <h1>Outstanding Payments</h1>
+    {% if not public %}
     <a href="/admin/players" class="btn">← Back to Players</a>
+    {% endif %}
 </div>
 
 <div class="card" style="margin-bottom: 15px;">
@@ -14,22 +16,52 @@
         Players with unpaid weeks: <strong>{{ outstanding|length }}</strong>
     </p>
     <div class="stats-nav">
-        <a href="/payments/outstanding?sort=name" class="btn {% if sort == 'name' %}active{% endif %}">Sort by Player</a>
-        <a href="/payments/outstanding?sort=owed" class="btn {% if sort == 'owed' %}active{% endif %}">Sort by Amount Owed</a>
+        <a href="{{ '/payments/shared/' + request.view_args.token if public else '/payments/outstanding' }}?sort=name" class="btn {% if sort == 'name' %}active{% endif %}">Sort by Player</a>
+        <a href="{{ '/payments/shared/' + request.view_args.token if public else '/payments/outstanding' }}?sort=owed" class="btn {% if sort == 'owed' %}active{% endif %}">Sort by Amount Owed</a>
     </div>
 </div>
+
+{% if not public and share_url %}
+<div class="card" style="margin-bottom: 15px;">
+    <p style="margin: 0 0 10px 0; font-weight: 700; color: #1f2d3a;">Share this list</p>
+    <p style="margin: 0 0 10px 0; color: #7f8c8d; font-size: 0.9em;">Anyone with this link can view (read-only). It's not linked from anywhere public, so only people you send it to will find it.</p>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+        <input id="share-link-input" type="text" readonly value="{{ share_url }}" style="flex: 1; min-width: 220px; padding: 10px 12px; border-radius: 8px; border: 1px solid #b8c2cc;">
+        <button type="button" class="btn" onclick="copyShareLink()">Copy Link</button>
+        <a class="btn" style="background-color: #25D366;" target="_blank" rel="noopener" href="https://wa.me/?text={{ ('Outstanding payments: ' + share_url) | urlencode }}">Share on WhatsApp</a>
+        <form method="POST" action="/payments/outstanding/share/regenerate" onsubmit="return confirm('This will invalidate the old link. Continue?');">
+            <button type="submit" class="btn" style="background-color: #e74c3c;">Revoke &amp; Regenerate</button>
+        </form>
+    </div>
+</div>
+<script>
+function copyShareLink() {
+    const input = document.getElementById('share-link-input');
+    input.select();
+    input.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(input.value).catch(() => document.execCommand('copy'));
+}
+</script>
+{% endif %}
 
 {% if outstanding %}
     {% for player in outstanding %}
     <div class="card" style="margin-bottom: 15px;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
             <h2 style="margin: 0;">
+                {% if public %}
+                {{ player.name }}
+                {% else %}
                 <a href="/players/{{ player.id }}/payments">{{ player.name }}</a>
+                {% endif %}
                 {% if player.alias %}<span style="color: #7f8c8d; font-weight: normal;">({{ player.alias }})</span>{% endif %}
             </h2>
-            <div>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <span class="badge" style="background-color: #e74c3c;">{{ player.unpaid_count }} unpaid</span>
                 <span class="badge" style="background-color: #2c3e50;">£{{ "%.2f"|format(player.owed_amount) }} owed</span>
+                {% if not public and player.share_url %}
+                <a class="btn" style="background-color: #25D366; padding: 6px 10px;" target="_blank" rel="noopener" href="https://wa.me/?text={{ ('Hi ' + player.name + ', here is your Wednesday Night FC payment history: ' + player.share_url) | urlencode }}">Send to {{ player.name.split(' ')[0] }}</a>
+                {% endif %}
             </div>
         </div>
         <table style="margin-top: 10px;">
