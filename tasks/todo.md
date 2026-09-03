@@ -1,3 +1,14 @@
+# Admin Games Unpaid Count
+
+- [x] Reuse existing payment rules to calculate unpaid playing players per game.
+- [x] Display the unpaid count on the admin games screen.
+- [x] Run focused validation and review the final diff.
+
+## Review
+
+- Added an `unpaid_count` to each admin game row, excluding payment-exempt players and paid attendance.
+- Validation: `python -m py_compile app.py` passed; authenticated Flask test request returned HTTP 200 and rendered the `Unpaid` column.
+
 # Sticker Packet Feature
 
 - [x] Add sticker player data model and image storage helpers.

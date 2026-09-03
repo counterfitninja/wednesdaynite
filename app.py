@@ -1406,9 +1406,16 @@ def admin_games():
         game_data = []
         for game in games:
             attendance = conn.execute('''
-                SELECT COUNT(*) as count 
-                FROM attendance 
-                WHERE game_id = ? AND status = 'playing'
+                SELECT
+                    COUNT(*) as players_count,
+                    SUM(CASE
+                        WHEN COALESCE(p.payment_exempt, 0) = 0
+                            AND COALESCE(a.paid, 0) = 0
+                        THEN 1 ELSE 0
+                    END) as unpaid_count
+                FROM attendance a
+                JOIN players p ON p.id = a.player_id
+                WHERE a.game_id = ? AND a.status = 'playing'
             ''', (game['id'],)).fetchone()
             
             game_data.append({
@@ -1416,7 +1423,8 @@ def admin_games():
                 'date': game['date'],
                 'location': game['location'],
                 'notes': game['notes'],
-                'players_count': attendance['count'] if attendance else 0,
+                'players_count': attendance['players_count'] if attendance else 0,
+                'unpaid_count': attendance['unpaid_count'] if attendance and attendance['unpaid_count'] is not None else 0,
                 'is_abandoned': game['is_abandoned'] if 'is_abandoned' in game.keys() else 0
             })
     
