@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}PayPal Import - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<h1>Reconcile PayPal Payments</h1>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<div class="card">
+    <h2>Upload PayPal Activity CSV</h2>
+    <p>Export your activity from PayPal and upload it here. Each row should be one payment with a
+       <strong>Date</strong> and <strong>Name</strong> column — we'll count how many payments each person made
+       and multiply by your weekly rate (set in Settings) to work out how much they've paid.</p>
+
+    <form method="POST" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="file">PayPal CSV File *</label>
+            <input type="file" id="file" name="file" accept=".csv" required>
+        </div>
+
+        <button type="submit" class="btn btn-success">Upload &amp; Review</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>What happens next</h2>
+    <ul>
+        <li>Payments are grouped by the payer name PayPal reports, and counted per person.</li>
+        <li>Each payment is assumed to be one week at your current weekly rate.</li>
+        <li>We try to automatically match each name to a player (exact name/alias match, or a name we've matched before).</li>
+        <li>You'll get a review screen to manually match any names we couldn't resolve — useful if someone pays under a nickname, spouse's name, etc.</li>
+        <li>Any player who still owes money but has no matching PayPal payment in this file will be highlighted as missing.</li>
+        <li>Once you're happy with the matches, you can mark the covered weeks as paid directly from the review screen.</li>
+    </ul>
+</div>
+{% endblock %}
