@@ -5,11 +5,20 @@
 {% block content %}
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
     <h1>PayPal Check</h1>
-    <div>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
         <a href="/payments/outstanding" class="btn">Outstanding Payments</a>
         <a href="/payments/paypal-import" class="btn">Import PayPal CSV</a>
+        <form method="POST" action="/payments/paypal/reset" onsubmit="return confirm('Remove all imported PayPal transactions, reconciliation batches, and saved payer matches? This cannot be undone.');">
+            <button type="submit" class="btn" style="background-color: #e74c3c;">Remove All PayPal Data</button>
+        </form>
     </div>
 </div>
+
+{% if request.args.get('paypal_reset') %}
+<div class="card" style="border-left: 4px solid #27ae60; margin-bottom: 15px;">
+    <p style="margin: 0; color: #27ae60;">All imported PayPal data has been removed.</p>
+</div>
+{% endif %}
 
 <div class="card" style="margin-bottom: 15px;">
     <p style="margin: 0; color: #7f8c8d;">

@@ -3225,6 +3225,19 @@ def paypal_check_overview():
     )
 
 
+@app.route('/payments/paypal/reset', methods=['POST'])
+@login_required
+def reset_paypal_data():
+    with get_db() as conn:
+        conn.execute('DELETE FROM paypal_import_entries')
+        conn.execute('DELETE FROM paypal_import_batches')
+        conn.execute('DELETE FROM paypal_transactions')
+        conn.execute('DELETE FROM paypal_name_aliases')
+        conn.commit()
+
+    return redirect(url_for('paypal_check_overview', paypal_reset='1'))
+
+
 @app.route('/payments/paypal-check/<int:player_id>')
 @login_required
 def paypal_check_player(player_id):
