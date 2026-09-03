@@ -6,7 +6,11 @@
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
     <h1>Outstanding Payments</h1>
     {% if not public %}
-    <a href="/admin/players" class="btn">← Back to Players</a>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <a href="/payments/paypal/import" class="btn">Reconcile PayPal CSV</a>
+        <a href="/payments/export.csv" class="btn">Export CSV</a>
+        <a href="/admin/players" class="btn">← Back to Players</a>
+    </div>
     {% endif %}
 </div>
 
