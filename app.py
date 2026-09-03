@@ -1214,58 +1214,6 @@ def init_db():
             )
         ''')
 
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS paypal_transactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                txn_id TEXT UNIQUE,
-                txn_date TEXT NOT NULL,
-                name TEXT,
-                email TEXT,
-                amount REAL NOT NULL,
-                currency TEXT,
-                status TEXT,
-                player_id INTEGER,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (player_id) REFERENCES players(id)
-            )
-        ''')
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_paypal_txn_player ON paypal_transactions(player_id)')
-        conn.execute('CREATE INDEX IF NOT EXISTS idx_paypal_txn_date ON paypal_transactions(txn_date)')
-
-        # PayPal reconciliation: remembers name -> player matches so repeat
-        # uploads (where PayPal shows a nickname/short name) auto-resolve.
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS paypal_name_aliases (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                paypal_name TEXT NOT NULL UNIQUE COLLATE NOCASE,
-                player_id INTEGER,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (player_id) REFERENCES players(id)
-            )
-        ''')
-
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS paypal_import_batches (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                filename TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-
-        conn.execute('''
-            CREATE TABLE IF NOT EXISTS paypal_import_entries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                batch_id INTEGER NOT NULL,
-                raw_name TEXT NOT NULL,
-                total_amount REAL NOT NULL DEFAULT 0,
-                transaction_count INTEGER NOT NULL DEFAULT 0,
-                dates_json TEXT,
-                matched_player_id INTEGER,
-                FOREIGN KEY (batch_id) REFERENCES paypal_import_batches(id),
-                FOREIGN KEY (matched_player_id) REFERENCES players(id)
-            )
-        ''')
-        
         # ============================================================
         # DATABASE MIGRATIONS
         # ============================================================
@@ -2944,8 +2892,6 @@ def _reconcile_player_weeks(weeks, transactions, weekly_payment_amount):
     return annotated, unallocated, flagged
 
 
-@app.route('/payments/paypal-import', methods=['GET', 'POST'])
-@login_required
 def paypal_transaction_import():
     if request.method == 'POST':
         file = request.files.get('file')
@@ -3037,8 +2983,6 @@ def _guess_player_match(conn, raw_name):
     return None
 
 
-@app.route('/payments/paypal/import', methods=['GET', 'POST'])
-@login_required
 def paypal_import():
     if request.method == 'POST':
         if 'file' not in request.files or request.files['file'].filename == '':
@@ -3153,8 +3097,6 @@ def paypal_import():
 
     return render_template('paypal_import.html')
 
-@app.route('/payments/paypal-check')
-@login_required
 def paypal_check_overview():
     with get_db() as conn:
         payment_setting = conn.execute(
@@ -3225,8 +3167,6 @@ def paypal_check_overview():
     )
 
 
-@app.route('/payments/paypal/reset', methods=['POST'])
-@login_required
 def reset_paypal_data():
     with get_db() as conn:
         conn.execute('DELETE FROM paypal_import_entries')
@@ -3238,8 +3178,6 @@ def reset_paypal_data():
     return redirect(url_for('paypal_check_overview', paypal_reset='1'))
 
 
-@app.route('/payments/paypal-check/<int:player_id>')
-@login_required
 def paypal_check_player(player_id):
     with get_db() as conn:
         player = conn.execute('SELECT * FROM players WHERE id = ?', (player_id,)).fetchone()
@@ -3285,8 +3223,6 @@ def paypal_check_player(player_id):
     )
 
 
-@app.route('/payments/paypal-transactions/<int:txn_id>/assign', methods=['POST'])
-@login_required
 def assign_paypal_transaction(txn_id):
     player_id = request.form.get('player_id', type=int)
     with get_db() as conn:
@@ -3295,8 +3231,6 @@ def assign_paypal_transaction(txn_id):
     return redirect(request.referrer or url_for('paypal_check_overview'))
 
 
-@app.route('/payments/paypal/review/<int:batch_id>')
-@login_required
 def paypal_review(batch_id):
     with get_db() as conn:
         batch = conn.execute('SELECT * FROM paypal_import_batches WHERE id = ?', (batch_id,)).fetchone()
@@ -3350,8 +3284,6 @@ def paypal_review(batch_id):
     )
 
 
-@app.route('/payments/paypal/match', methods=['POST'])
-@login_required
 def paypal_match():
     entry_id = request.form.get('entry_id', type=int)
     player_id = request.form.get('player_id', type=int)
@@ -3378,8 +3310,6 @@ def paypal_match():
     return redirect(url_for('paypal_review', batch_id=batch_id))
 
 
-@app.route('/payments/paypal/apply/<int:entry_id>', methods=['POST'])
-@login_required
 def paypal_apply_payment(entry_id):
     """Mark the player's oldest unpaid weeks as paid, up to what their PayPal total covers."""
     batch_id = request.form.get('batch_id', type=int)
