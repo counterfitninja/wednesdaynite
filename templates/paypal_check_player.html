@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}PayPal Check - {{ player.name }} - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+    <h1>PayPal Check — {{ player.name }}</h1>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <a href="/players/{{ player.id }}/payments" class="btn">Full Payment History</a>
+        <a href="/payments/paypal" class="btn">← Back to All Players</a>
+    </div>
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Location</th>
+                <th>Marked Paid?</th>
+                <th>PayPal Payment</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for week in weeks %}
+            <tr
+                {% if week.status == 'missing_payment' %}style="background-color: #fdecea;"
+                {% elif week.status == 'unrecorded_payment' %}style="background-color: #fff8e1;"
+                {% endif %}
+            >
+                <td>{{ week.date|ukdate }}</td>
+                <td>{{ week.location or 'N/A' }}</td>
+                <td>{{ '✅' if week.paid else '—' }}</td>
+                <td>
+                    {% if week.paypal_match %}
+                    {{ week.paypal_match.txn_date|ukdate }} (£{{ "%.2f"|format(week.paypal_match.amount or 0) }})
+                    {% else %}
+                    —
+                    {% endif %}
+                </td>
+                <td>
+                    {% if week.status == 'matched' %}
+                    <span class="badge" style="background-color: #27ae60;">OK</span>
+                    {% elif week.status == 'missing_payment' %}
+                    <span class="badge" style="background-color: #e74c3c;">Marked paid, no PayPal found</span>
+                    {% elif week.status == 'unrecorded_payment' %}
+                    <span class="badge" style="background-color: #f39c12;">PayPal found, not ticked</span>
+                    {% else %}
+                    <span class="badge" style="background-color: #7f8c8d;">Unpaid</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if week.status == 'unrecorded_payment' %}
+                    <form method="POST" action="/payments/paypal/mark-paid">
+                        <input type="hidden" name="attendance_id" value="{{ week.attendance_id }}">
+                        <input type="hidden" name="player_id" value="{{ player.id }}">
+                        <button type="submit" class="btn" style="padding: 4px 10px;">Mark Paid</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if unmatched_txns %}
+<div class="card" style="margin-top: 15px;">
+    <h2 style="margin-top: 0;">Extra PayPal Payments</h2>
+    <p style="color: #7f8c8d;">These PayPal payments from {{ player.name }} didn't line up with any game week within the matching window — worth a manual look (duplicate payment, or for a week outside the normal window).</p>
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for txn in unmatched_txns %}
+            <tr>
+                <td>{{ txn.txn_date|ukdate }}</td>
+                <td>£{{ "%.2f"|format(txn.amount or 0) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

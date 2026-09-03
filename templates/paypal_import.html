@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Import PayPal Payments - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+    <h1>Import PayPal Payments</h1>
+    <a href="/payments/paypal" class="btn">← Back to PayPal Check</a>
+</div>
+
+<div class="card" style="margin-bottom: 15px;">
+    <p style="margin: 0 0 10px 0; color: #7f8c8d;">
+        Upload your PayPal activity export (CSV). At minimum it needs a <strong>Date</strong> and
+        <strong>Name</strong> column — an Amount/Status/Type column is used if present, otherwise
+        each row is treated as one payment at the weekly rate.
+    </p>
+    {% if error %}
+    <p style="color: #e74c3c; font-weight: 600;">{{ error }}</p>
+    {% endif %}
+    {% if success %}
+    <p style="color: #27ae60; font-weight: 600;">{{ success }}</p>
+    {% endif %}
+    <form method="POST" enctype="multipart/form-data" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <input type="file" name="file" accept=".csv" required>
+        <button type="submit" class="btn">Import</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2 style="margin-top: 0;">Re-importing?</h2>
+    <p style="color: #7f8c8d;">Re-uploading the same export is safe — rows already imported for the same date and name won't be duplicated.</p>
+    <form method="POST" action="/payments/paypal/reset" onsubmit="return confirm('This clears all imported PayPal data and name matches. Continue?');">
+        <button type="submit" class="btn" style="background-color: #e74c3c;">Clear all imported PayPal data</button>
+    </form>
+</div>
+{% endblock %}
