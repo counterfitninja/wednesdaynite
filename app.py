@@ -1136,6 +1136,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
                 alias TEXT,
+                paypal_name TEXT,
                 phone TEXT,
                 email TEXT,
                 skill_rating INTEGER DEFAULT 5,
@@ -1268,6 +1269,11 @@ def init_db():
 
         try:
             conn.execute('ALTER TABLE players ADD COLUMN one_off_ball_contributor INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        try:
+            conn.execute('ALTER TABLE players ADD COLUMN paypal_name TEXT')
         except sqlite3.OperationalError:
             pass  # Column already exists
 
@@ -2516,6 +2522,7 @@ def add_player():
     if request.method == 'POST':
         name = request.form['name']
         alias = request.form.get('alias', '').strip() or None
+        paypal_name = request.form.get('paypal_name', '').strip() or None
         phone = request.form.get('phone', '')
         email = request.form.get('email', '')
         skill_rating = request.form.get('skill_rating', 5, type=int)
@@ -2527,8 +2534,8 @@ def add_player():
         
         try:
             with get_db() as conn:
-                conn.execute('INSERT INTO players (name, alias, phone, email, skill_rating, payment_exempt) VALUES (?, ?, ?, ?, ?, ?)',
-                           (name, alias, phone, email, skill_rating, payment_exempt))
+                conn.execute('INSERT INTO players (name, alias, paypal_name, phone, email, skill_rating, payment_exempt) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                           (name, alias, paypal_name, phone, email, skill_rating, payment_exempt))
                 conn.commit()
             return redirect(url_for('admin_players'))
         except sqlite3.IntegrityError:
@@ -2542,6 +2549,7 @@ def edit_player(player_id):
         if request.method == 'POST':
             name = request.form['name']
             alias = request.form.get('alias', '').strip() or None
+            paypal_name = request.form.get('paypal_name', '').strip() or None
             phone = request.form.get('phone', '')
             email = request.form.get('email', '')
             skill_rating = request.form.get('skill_rating', 5, type=int)
@@ -2557,8 +2565,8 @@ def edit_player(player_id):
                     error='Skill rating must be between 1 and 5'
                 )
             
-            conn.execute('UPDATE players SET name = ?, alias = ?, phone = ?, email = ?, skill_rating = ?, payment_exempt = ? WHERE id = ?',
-                       (name, alias, phone, email, skill_rating, payment_exempt, player_id))
+            conn.execute('UPDATE players SET name = ?, alias = ?, paypal_name = ?, phone = ?, email = ?, skill_rating = ?, payment_exempt = ? WHERE id = ?',
+                       (name, alias, paypal_name, phone, email, skill_rating, payment_exempt, player_id))
             conn.commit()
             return redirect(url_for('admin_players'))
         
@@ -2842,7 +2850,7 @@ def _guess_player_match(conn, raw_name):
 
     Order of precedence:
       1. A previously remembered paypal_name_aliases mapping.
-      2. Exact (case-insensitive) match against player name or alias.
+      2. Exact (case-insensitive) match against player name, alias, or PayPal name.
       3. Normalized (punctuation/whitespace-insensitive) exact match.
       4. Unambiguous token-overlap match (e.g. "Dave B" vs "Dave Bird").
     Returns player_id or None.
@@ -2854,12 +2862,14 @@ def _guess_player_match(conn, raw_name):
     if remembered and remembered['player_id']:
         return remembered['player_id']
 
-    players = conn.execute('SELECT id, name, alias FROM players').fetchall()
+    players = conn.execute('SELECT id, name, alias, paypal_name FROM players').fetchall()
 
     for p in players:
         if p['name'] and p['name'].strip().lower() == raw_name.strip().lower():
             return p['id']
         if p['alias'] and p['alias'].strip().lower() == raw_name.strip().lower():
+            return p['id']
+        if p['paypal_name'] and p['paypal_name'].strip().lower() == raw_name.strip().lower():
             return p['id']
 
     norm_raw = _normalize_name_for_match(raw_name)
@@ -2871,11 +2881,13 @@ def _guess_player_match(conn, raw_name):
             return p['id']
         if p['alias'] and _normalize_name_for_match(p['alias']) == norm_raw:
             return p['id']
+        if p['paypal_name'] and _normalize_name_for_match(p['paypal_name']) == norm_raw:
+            return p['id']
 
     raw_tokens = set(norm_raw.split())
     candidates = []
     for p in players:
-        for candidate_name in [p['name'], p['alias']]:
+        for candidate_name in [p['name'], p['alias'], p['paypal_name']]:
             if not candidate_name:
                 continue
             candidate_tokens = set(_normalize_name_for_match(candidate_name).split())

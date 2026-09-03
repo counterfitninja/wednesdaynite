@@ -49,6 +49,12 @@
             <input type="text" id="alias" name="alias" value="{{ player.alias or '' }}" placeholder="Optional nickname or alternate name">
             <small style="color: #7f8c8d;">If set, imports or attendance with this name map to the player.</small>
         </div>
+
+        <div class="form-group">
+            <label for="paypal_name">PayPal name</label>
+            <input type="text" id="paypal_name" name="paypal_name" value="{{ player.paypal_name or '' }}" placeholder="Name shown on this player's PayPal payments">
+            <small style="color: #7f8c8d;">Optional. If set, PayPal imports paid under this name are automatically matched to this player.</small>
+        </div>
         
         <div class="form-group">
             <label for="phone">Phone</label>
