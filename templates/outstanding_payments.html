@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Outstanding Payments - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+    <h1>Outstanding Payments</h1>
+    <a href="/admin/players" class="btn">← Back to Players</a>
+</div>
+
+<div class="card" style="margin-bottom: 15px;">
+    <p style="margin: 0 0 10px 0; color: #7f8c8d;">
+        Weekly rate: <strong>£{{ "%.2f"|format(weekly_payment_amount) }}</strong> •
+        Players with unpaid weeks: <strong>{{ outstanding|length }}</strong>
+    </p>
+    <div class="stats-nav">
+        <a href="/payments/outstanding?sort=name" class="btn {% if sort == 'name' %}active{% endif %}">Sort by Player</a>
+        <a href="/payments/outstanding?sort=owed" class="btn {% if sort == 'owed' %}active{% endif %}">Sort by Amount Owed</a>
+    </div>
+</div>
+
+{% if outstanding %}
+    {% for player in outstanding %}
+    <div class="card" style="margin-bottom: 15px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <h2 style="margin: 0;">
+                <a href="/players/{{ player.id }}/payments">{{ player.name }}</a>
+                {% if player.alias %}<span style="color: #7f8c8d; font-weight: normal;">({{ player.alias }})</span>{% endif %}
+            </h2>
+            <div>
+                <span class="badge" style="background-color: #e74c3c;">{{ player.unpaid_count }} unpaid</span>
+                <span class="badge" style="background-color: #2c3e50;">£{{ "%.2f"|format(player.owed_amount) }} owed</span>
+            </div>
+        </div>
+        <table style="margin-top: 10px;">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Location</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in player.dates %}
+                <tr>
+                    <td>{{ entry.date|ukdate }}</td>
+                    <td>{{ entry.location or 'N/A' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+{% else %}
+<div class="card">
+    <p>No outstanding payments — everyone is paid up! 🎉</p>
+</div>
+{% endif %}
+{% endblock %}

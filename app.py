@@ -2503,6 +2503,66 @@ def edit_player(player_id):
         return render_template('edit_player.html', player=player, face_url=get_player_face_url(player_id))
     return render_template('add_player.html')
 
+@app.route('/payments/outstanding')
+@login_required
+def outstanding_payments():
+    sort = request.args.get('sort', 'name')
+
+    with get_db() as conn:
+        payment_setting = conn.execute(
+            "SELECT value FROM settings WHERE key = 'weekly_payment_amount'"
+        ).fetchone()
+        try:
+            weekly_payment_amount = float(payment_setting['value']) if payment_setting and payment_setting['value'] is not None else 0.0
+        except (TypeError, ValueError):
+            weekly_payment_amount = 0.0
+
+        rows = conn.execute('''
+            SELECT
+                p.id as player_id,
+                p.name,
+                p.alias,
+                g.id as game_id,
+                g.date,
+                g.location
+            FROM attendance a
+            JOIN players p ON p.id = a.player_id
+            JOIN games g ON g.id = a.game_id
+            WHERE a.status = 'playing'
+              AND COALESCE(a.paid, 0) = 0
+              AND COALESCE(p.payment_exempt, 0) = 0
+              AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+              AND g.date <= date('now')
+            ORDER BY p.name, g.date DESC
+        ''').fetchall()
+
+    players_by_id = {}
+    for row in rows:
+        entry = players_by_id.setdefault(row['player_id'], {
+            'id': row['player_id'],
+            'name': row['name'],
+            'alias': row['alias'],
+            'dates': []
+        })
+        entry['dates'].append({'game_id': row['game_id'], 'date': row['date'], 'location': row['location']})
+
+    outstanding = list(players_by_id.values())
+    for player in outstanding:
+        player['unpaid_count'] = len(player['dates'])
+        player['owed_amount'] = round(player['unpaid_count'] * weekly_payment_amount, 2)
+
+    if sort == 'owed':
+        outstanding.sort(key=lambda p: p['unpaid_count'], reverse=True)
+    else:
+        outstanding.sort(key=lambda p: p['name'].lower())
+
+    return render_template(
+        'outstanding_payments.html',
+        outstanding=outstanding,
+        weekly_payment_amount=weekly_payment_amount,
+        sort=sort
+    )
+
 @app.route('/players/<int:player_id>/payments', methods=['GET', 'POST'])
 @login_required
 def player_payments(player_id):
