@@ -10,6 +10,8 @@ from functools import wraps
 import html
 from io import BytesIO, StringIO
 import csv
+import io
+import json
 from PIL import Image, ImageDraw, ImageFont, UnidentifiedImageError
 
 try:
@@ -1204,6 +1206,40 @@ def init_db():
                 token TEXT UNIQUE NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (player_id) REFERENCES players(id)
+            )
+        ''')
+
+        # PayPal reconciliation: remembers name -> player matches so repeat
+        # uploads (where PayPal shows a nickname/short name) auto-resolve.
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS paypal_name_aliases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                paypal_name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                player_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (player_id) REFERENCES players(id)
+            )
+        ''')
+
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS paypal_import_batches (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                filename TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS paypal_import_entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                batch_id INTEGER NOT NULL,
+                raw_name TEXT NOT NULL,
+                total_amount REAL NOT NULL DEFAULT 0,
+                transaction_count INTEGER NOT NULL DEFAULT 0,
+                dates_json TEXT,
+                matched_player_id INTEGER,
+                FOREIGN KEY (batch_id) REFERENCES paypal_import_batches(id),
+                FOREIGN KEY (matched_player_id) REFERENCES players(id)
             )
         ''')
         
@@ -2742,6 +2778,319 @@ def shared_player_payments(token):
         share_url=None,
         public=True
     )
+
+def _normalize_name_for_match(name):
+    """Lowercase, strip punctuation/extra whitespace for fuzzy comparisons."""
+    if not name:
+        return ''
+    cleaned = re.sub(r'[^a-z0-9\s]', '', name.lower())
+    return re.sub(r'\s+', ' ', cleaned).strip()
+
+
+def _guess_player_match(conn, raw_name):
+    """Try to auto-match a PayPal payer name to a stored player.
+
+    Order of precedence:
+      1. A previously remembered paypal_name_aliases mapping.
+      2. Exact (case-insensitive) match against player name or alias.
+      3. Normalized (punctuation/whitespace-insensitive) exact match.
+      4. Unambiguous token-overlap match (e.g. "Dave B" vs "Dave Bird").
+    Returns player_id or None.
+    """
+    remembered = conn.execute(
+        'SELECT player_id FROM paypal_name_aliases WHERE paypal_name = ? COLLATE NOCASE',
+        (raw_name,)
+    ).fetchone()
+    if remembered and remembered['player_id']:
+        return remembered['player_id']
+
+    players = conn.execute('SELECT id, name, alias FROM players').fetchall()
+
+    for p in players:
+        if p['name'] and p['name'].strip().lower() == raw_name.strip().lower():
+            return p['id']
+        if p['alias'] and p['alias'].strip().lower() == raw_name.strip().lower():
+            return p['id']
+
+    norm_raw = _normalize_name_for_match(raw_name)
+    if not norm_raw:
+        return None
+
+    for p in players:
+        if _normalize_name_for_match(p['name']) == norm_raw:
+            return p['id']
+        if p['alias'] and _normalize_name_for_match(p['alias']) == norm_raw:
+            return p['id']
+
+    raw_tokens = set(norm_raw.split())
+    candidates = []
+    for p in players:
+        for candidate_name in [p['name'], p['alias']]:
+            if not candidate_name:
+                continue
+            candidate_tokens = set(_normalize_name_for_match(candidate_name).split())
+            if not candidate_tokens:
+                continue
+            if raw_tokens.issubset(candidate_tokens) or candidate_tokens.issubset(raw_tokens):
+                candidates.append(p['id'])
+                break
+    unique_candidates = set(candidates)
+    if len(unique_candidates) == 1:
+        return unique_candidates.pop()
+
+    return None
+
+
+@app.route('/payments/paypal/import', methods=['GET', 'POST'])
+@login_required
+def paypal_import():
+    if request.method == 'POST':
+        if 'file' not in request.files or request.files['file'].filename == '':
+            return render_template('paypal_import.html', error='No file selected')
+
+        file = request.files['file']
+
+        try:
+            stream = io.StringIO(file.stream.read().decode('utf-8-sig'), newline=None)
+            reader = csv.DictReader(stream)
+
+            if not reader.fieldnames:
+                return render_template('paypal_import.html', error='CSV appears to be empty')
+
+            field_lookup = {f.strip().lower(): f for f in reader.fieldnames}
+
+            def find_field(*candidates):
+                for c in candidates:
+                    if c in field_lookup:
+                        return field_lookup[c]
+                return None
+
+            name_field = find_field('name', 'from name', 'payer name')
+            date_field = find_field('date', 'date/time', 'created date')
+            # Amount is optional: this CSV export is just Date + Name, one row per
+            # payment. When there's no amount column, each row counts as one
+            # payment of the fixed weekly rate (fetched below).
+            amount_field = find_field('gross', 'amount', 'gross amount', 'net')
+            status_field = find_field('status')
+            type_field = find_field('type', 'transaction type')
+
+            if not name_field:
+                return render_template(
+                    'paypal_import.html',
+                    error='Could not find a Name column in this CSV. Expected at least Date and Name.'
+                )
+
+            with get_db() as weekly_conn:
+                payment_setting = weekly_conn.execute(
+                    "SELECT value FROM settings WHERE key = 'weekly_payment_amount'"
+                ).fetchone()
+            try:
+                weekly_payment_amount = float(payment_setting['value']) if payment_setting and payment_setting['value'] is not None else 0.0
+            except (TypeError, ValueError):
+                weekly_payment_amount = 0.0
+
+            grouped = {}
+            for row in reader:
+                raw_name = (row.get(name_field) or '').strip()
+                if not raw_name:
+                    continue
+
+                if status_field:
+                    status_val = (row.get(status_field) or '').strip().lower()
+                    if status_val and status_val not in ('completed', 'success', 'succeeded'):
+                        continue
+
+                if type_field:
+                    type_val = (row.get(type_field) or '').strip().lower()
+                    if 'refund' in type_val or 'reversal' in type_val or 'chargeback' in type_val:
+                        continue
+
+                if amount_field:
+                    amount_raw = (row.get(amount_field) or '0').replace(',', '').replace('£', '').replace('$', '').strip()
+                    try:
+                        amount = float(amount_raw)
+                    except ValueError:
+                        continue
+                    if amount <= 0:
+                        continue
+                else:
+                    # No amount column: each row is one payment at the fixed rate.
+                    amount = weekly_payment_amount
+
+                entry = grouped.setdefault(raw_name, {'total_amount': 0.0, 'count': 0, 'dates': []})
+                entry['total_amount'] += amount
+                entry['count'] += 1
+                if date_field:
+                    date_val = (row.get(date_field) or '').strip()
+                    if date_val:
+                        entry['dates'].append(date_val)
+
+            if not grouped:
+                return render_template('paypal_import.html', error='No payment rows found in this CSV')
+
+            with get_db() as conn:
+                cursor = conn.execute(
+                    'INSERT INTO paypal_import_batches (filename) VALUES (?)',
+                    (file.filename,)
+                )
+                batch_id = cursor.lastrowid
+
+                for raw_name, data in grouped.items():
+                    matched_player_id = _guess_player_match(conn, raw_name)
+                    conn.execute('''
+                        INSERT INTO paypal_import_entries
+                            (batch_id, raw_name, total_amount, transaction_count, dates_json, matched_player_id)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (
+                        batch_id,
+                        raw_name,
+                        round(data['total_amount'], 2),
+                        data['count'],
+                        json.dumps(data['dates']),
+                        matched_player_id
+                    ))
+                conn.commit()
+
+            return redirect(url_for('paypal_review', batch_id=batch_id))
+
+        except Exception as e:
+            return render_template('paypal_import.html', error=f'Import failed: {str(e)}')
+
+    return render_template('paypal_import.html')
+
+
+@app.route('/payments/paypal/review/<int:batch_id>')
+@login_required
+def paypal_review(batch_id):
+    with get_db() as conn:
+        batch = conn.execute('SELECT * FROM paypal_import_batches WHERE id = ?', (batch_id,)).fetchone()
+        if not batch:
+            return "Not found", 404
+
+        entries = conn.execute('''
+            SELECT e.*, p.name as matched_name, p.alias as matched_alias
+            FROM paypal_import_entries e
+            LEFT JOIN players p ON p.id = e.matched_player_id
+            WHERE e.batch_id = ?
+            ORDER BY e.raw_name COLLATE NOCASE
+        ''', (batch_id,)).fetchall()
+
+        all_players = conn.execute('SELECT id, name, alias FROM players ORDER BY name').fetchall()
+
+        payment_setting = conn.execute(
+            "SELECT value FROM settings WHERE key = 'weekly_payment_amount'"
+        ).fetchone()
+        try:
+            weekly_payment_amount = float(payment_setting['value']) if payment_setting and payment_setting['value'] is not None else 0.0
+        except (TypeError, ValueError):
+            weekly_payment_amount = 0.0
+
+    outstanding, _ = _get_outstanding_payments_data('name')
+    outstanding_by_player_id = {o['id']: o for o in outstanding}
+
+    entries_out = []
+    matched_player_ids = set()
+    for e in entries:
+        entry = dict(e)
+        entry['dates'] = json.loads(e['dates_json']) if e['dates_json'] else []
+        if e['matched_player_id']:
+            matched_player_ids.add(e['matched_player_id'])
+            outstanding_entry = outstanding_by_player_id.get(e['matched_player_id'])
+            owed = outstanding_entry['owed_amount'] if outstanding_entry else 0.0
+            entry['owed_amount'] = owed
+            entry['amount_difference'] = round(e['total_amount'] - owed, 2)
+            entry['covers_weeks'] = int(weekly_payment_amount and e['total_amount'] // weekly_payment_amount)
+        else:
+            entry['owed_amount'] = None
+            entry['amount_difference'] = None
+            entry['covers_weeks'] = 0
+        entries_out.append(entry)
+
+    # Players who owe money but have no corresponding PayPal payment in this batch
+    missing_players = [o for o in outstanding if o['id'] not in matched_player_ids]
+
+    return render_template(
+        'paypal_review.html',
+        batch=batch,
+        entries=entries_out,
+        all_players=all_players,
+        missing_players=missing_players,
+        weekly_payment_amount=weekly_payment_amount
+    )
+
+
+@app.route('/payments/paypal/match', methods=['POST'])
+@login_required
+def paypal_match():
+    entry_id = request.form.get('entry_id', type=int)
+    player_id = request.form.get('player_id', type=int)
+    batch_id = request.form.get('batch_id', type=int)
+    remember = request.form.get('remember') == 'on'
+
+    if not entry_id:
+        return redirect(url_for('paypal_import'))
+
+    with get_db() as conn:
+        entry = conn.execute('SELECT raw_name FROM paypal_import_entries WHERE id = ?', (entry_id,)).fetchone()
+        conn.execute(
+            'UPDATE paypal_import_entries SET matched_player_id = ? WHERE id = ?',
+            (player_id if player_id else None, entry_id)
+        )
+
+        if remember and player_id and entry:
+            conn.execute('''
+                INSERT INTO paypal_name_aliases (paypal_name, player_id)
+                VALUES (?, ?)
+                ON CONFLICT(paypal_name) DO UPDATE SET player_id = excluded.player_id
+            ''', (entry['raw_name'], player_id))
+
+        conn.commit()
+
+    return redirect(url_for('paypal_review', batch_id=batch_id))
+
+
+@app.route('/payments/paypal/apply/<int:entry_id>', methods=['POST'])
+@login_required
+def paypal_apply_payment(entry_id):
+    """Mark the player's oldest unpaid weeks as paid, up to what their PayPal total covers."""
+    batch_id = request.form.get('batch_id', type=int)
+
+    with get_db() as conn:
+        entry = conn.execute('SELECT * FROM paypal_import_entries WHERE id = ?', (entry_id,)).fetchone()
+        if not entry or not entry['matched_player_id']:
+            return redirect(url_for('paypal_review', batch_id=batch_id))
+
+        payment_setting = conn.execute(
+            "SELECT value FROM settings WHERE key = 'weekly_payment_amount'"
+        ).fetchone()
+        try:
+            weekly_payment_amount = float(payment_setting['value']) if payment_setting and payment_setting['value'] is not None else 0.0
+        except (TypeError, ValueError):
+            weekly_payment_amount = 0.0
+
+        weeks_covered = int(entry['total_amount'] // weekly_payment_amount) if weekly_payment_amount else 0
+
+        if weeks_covered > 0:
+            unpaid = conn.execute('''
+                SELECT a.id
+                FROM attendance a
+                JOIN games g ON g.id = a.game_id
+                WHERE a.player_id = ?
+                  AND a.status = 'playing'
+                  AND COALESCE(a.paid, 0) = 0
+                  AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+                  AND g.date <= date('now')
+                ORDER BY g.date ASC
+                LIMIT ?
+            ''', (entry['matched_player_id'], weeks_covered)).fetchall()
+
+            for row in unpaid:
+                conn.execute('UPDATE attendance SET paid = 1 WHERE id = ?', (row['id'],))
+
+        conn.commit()
+
+    return redirect(url_for('paypal_review', batch_id=batch_id))
+
 
 @app.route('/players/<int:player_id>/delete', methods=['POST'])
 @login_required
