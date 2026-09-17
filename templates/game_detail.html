@@ -539,6 +539,9 @@ function confirmBulkMatches() {
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = '/games/{{ game.id }}/bulk-attendance-confirm';
+    const csrf = document.createElement('input');
+    csrf.type = 'hidden'; csrf.name = '_csrf_token'; csrf.value = '{{ csrf_token() }}';
+    form.appendChild(csrf);
     playerIds.forEach(id => {
         const inp = document.createElement('input');
         inp.type = 'hidden'; inp.name = 'player_ids'; inp.value = id;
