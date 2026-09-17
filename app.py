@@ -54,7 +54,11 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = bool(os.environ.get('WEBSITE_INSTANCE_ID'))
 app.config['MAX_CONTENT_LENGTH'] = MAX_SHARED_IMAGE_BYTES if 'MAX_SHARED_IMAGE_BYTES' in globals() else 8 * 1024 * 1024
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=os.environ.get('LOG_LEVEL', 'INFO'))
+log_level = os.environ.get('LOG_LEVEL', 'INFO').upper()
+logging.basicConfig(level=log_level, force=True)
+logger.setLevel(log_level)
+logger.propagate = True
+logger.info('Application logging initialized: logger=%s level=%s', __name__, log_level)
 # Keep admin sessions alive longer by default; can be overridden via env var.
 session_lifetime_days = int(os.environ.get('SESSION_LIFETIME_DAYS', '180'))
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=session_lifetime_days)

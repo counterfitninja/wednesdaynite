@@ -32,6 +32,13 @@ def test_invalid_csrf_logs_safe_request_diagnostics(client, caplog):
     assert 'invalid' not in message.split('supplied_fp=', 1)[1].split(' ', 1)[0]
 
 
+def test_csrf_logger_is_enabled_for_info_diagnostics():
+    import logging
+
+    application_logger = logging.getLogger('app')
+    assert application_logger.isEnabledFor(logging.INFO)
+
+
 def test_authenticated_mutation_requires_csrf(client):
     login(client)
     response = client.post('/logout')
