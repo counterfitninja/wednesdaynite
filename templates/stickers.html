@@ -299,6 +299,7 @@
 
     <div class="card" style="min-height: 240px;">
         <form method="POST" action="/stickers/open" class="pack-open-form">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="pack-blank-card" aria-label="Open packet">
                 <img src="{{ url_for('static', filename='wn.png') }}" alt="WNFC logo">
                 <span class="pack-blank-card-label">Click to open</span>
@@ -314,6 +315,7 @@
                 <p style="color: #607284; margin: 0;">Cards flip in one by one after the pack opens.</p>
             </div>
             <form method="POST" action="/stickers/open">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-success">Open Another Packet</button>
             </form>
         </div>
@@ -372,6 +374,7 @@
                 <p style="color: #607284; margin: 0;">Cards flip in one by one after the pack opens.</p>
             </div>
             <form method="POST" action="/stickers/open">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-success">Open Another Packet</button>
             </form>
         </div>
@@ -408,6 +411,7 @@
             <h2 style="margin-bottom: 8px;">Add A Player Sticker</h2>
             <p style="color: #607284; margin-bottom: 16px;">Upload square or portrait photos for the best result. Position is optional.</p>
             <form method="POST" action="/stickers" enctype="multipart/form-data">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <div class="form-group">
                     <label for="name">Player Name</label>
                     <input id="name" name="name" type="text" maxlength="80" required>
@@ -424,6 +428,7 @@
             </form>
             <hr style="margin: 20px 0; border: 0; border-top: 1px solid #e4eaef;">
             <form method="POST" action="/stickers/open">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-block" {% if sticker_players|length < 6 %}disabled style="opacity: 0.55; cursor: not-allowed;"{% endif %}>Tear Open A Packet</button>
             </form>
             <p style="margin-top: 12px; color: #607284; font-size: 0.92rem;">You need at least 6 available players (uploaded stickers + WNFC player list).</p>

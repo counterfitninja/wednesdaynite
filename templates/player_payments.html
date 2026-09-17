@@ -22,6 +22,7 @@
         <button type="button" class="btn" onclick="copyShareLink()">Copy Link</button>
         <a class="btn" style="background-color: #25D366;" target="_blank" rel="noopener" href="https://wa.me/?text={{ ('Your Wednesday Night FC payment history: ' + share_url) | urlencode }}">Share on WhatsApp</a>
         <form method="POST" action="/players/{{ player.id }}/payments/share/regenerate" onsubmit="return confirm('This will invalidate the old link. Continue?');">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn" style="background-color: #e74c3c;">Revoke &amp; Regenerate</button>
         </form>
     </div>
@@ -92,6 +93,7 @@ function copyShareLink() {
                     {% endif %}
                     {% else %}
                     <form method="POST" action="/players/{{ player.id }}/payments" style="display: inline;">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="attendance_id" value="{{ week.attendance_id }}">
                         <label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer;">
                             <input type="checkbox" name="paid" value="1" {% if week.paid %}checked{% endif %} style="width: auto;" onchange="this.form.submit()">

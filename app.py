@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, session, make_response
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session, make_response, abort
 import sqlite3
 from datetime import datetime, timedelta
 import os
@@ -6,9 +6,11 @@ import random
 import secrets
 import base64
 import re
+import logging
 from functools import wraps
 import html
 from io import BytesIO
+from urllib.parse import urlparse
 from PIL import Image, ImageDraw, ImageFont, UnidentifiedImageError
 
 try:
@@ -25,7 +27,16 @@ except Exception:
     np = None
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'change-this-to-something-secure-in-production')
+configured_secret = os.environ.get('SECRET_KEY')
+if not configured_secret and os.environ.get('WEBSITE_INSTANCE_ID'):
+    raise ValueError('SECRET_KEY environment variable must be set in Azure')
+app.secret_key = configured_secret or 'change-this-to-something-secure-in-production'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = bool(os.environ.get('WEBSITE_INSTANCE_ID'))
+app.config['MAX_CONTENT_LENGTH'] = MAX_SHARED_IMAGE_BYTES if 'MAX_SHARED_IMAGE_BYTES' in globals() else 8 * 1024 * 1024
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=os.environ.get('LOG_LEVEL', 'INFO'))
 # Keep admin sessions alive longer by default; can be overridden via env var.
 session_lifetime_days = int(os.environ.get('SESSION_LIFETIME_DAYS', '180'))
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=session_lifetime_days)
@@ -74,8 +85,8 @@ def inject_build_version():
             target = latest_pending if latest_pending else latest_completed
             if target:
                 final_score_game_id = target['id']
-    except Exception as exc:
-        print(f"DEBUG - final score lookup failed: {exc}")
+    except Exception:
+        logger.exception('Final score lookup failed')
 
     return {
         'build_version': BUILD_VERSION,
@@ -468,6 +479,22 @@ def stats_balance():
 def healthcheck():
     return {'status': 'ok', 'build_version': BUILD_VERSION, 'host': HOST, 'port': PORT}
 
+
+@app.errorhandler(403)
+def forbidden(_error):
+    return render_template('error.html', status_code=403, message='This request is not allowed.'), 403
+
+
+@app.errorhandler(404)
+def not_found(_error):
+    return render_template('error.html', status_code=404, message='The requested page was not found.'), 404
+
+
+@app.errorhandler(500)
+def internal_error(_error):
+    logger.exception('Unhandled application error')
+    return render_template('error.html', status_code=500, message='Something went wrong. Please try again.'), 500
+
 @app.template_filter('ukdate')
 def format_uk_date(date_string):
     """Convert YYYY-MM-DD to DD/MM/YYYY format"""
@@ -500,6 +527,37 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+
+def is_safe_next_url(target):
+    if not target:
+        return False
+    parsed = urlparse(target)
+    return not parsed.scheme and not parsed.netloc and target.startswith('/') and not target.startswith('//')
+
+
+def get_csrf_token():
+    token = session.get('_csrf_token')
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session['_csrf_token'] = token
+    return token
+
+
+@app.context_processor
+def inject_security_context():
+    return {'csrf_token': get_csrf_token}
+
+
+@app.before_request
+def validate_csrf_for_state_changes():
+    if request.method not in {'POST', 'PUT', 'PATCH', 'DELETE'}:
+        return None
+    supplied = request.form.get('_csrf_token') or request.headers.get('X-CSRFToken')
+    expected = session.get('_csrf_token')
+    if not expected or not supplied or not secrets.compare_digest(supplied, expected):
+        abort(403)
+    return None
+
 # Use /home directory in Azure Web Apps for persistent storage
 if os.environ.get('WEBSITE_INSTANCE_ID'):
     # Running in Azure
@@ -511,6 +569,7 @@ else:
 def get_db():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA foreign_keys = ON')
     return conn
 
 
@@ -1294,23 +1353,20 @@ init_db()
 def login():
     if request.method == 'POST':
         password = request.form.get('password')
-        # Debug logging
-        print(f"DEBUG - Entered password length: {len(password) if password else 0}")
-        print(f"DEBUG - Expected password length: {len(ADMIN_PASSWORD) if ADMIN_PASSWORD else 0}")
-        print(f"DEBUG - Password match: {password == ADMIN_PASSWORD}")
-        
         if password == ADMIN_PASSWORD:
             session.permanent = True
             session['logged_in'] = True
-            next_url = request.args.get('next', url_for('admin'))
+            requested_next = request.args.get('next')
+            next_url = requested_next if is_safe_next_url(requested_next) else url_for('admin')
             return redirect(next_url)
         else:
             return render_template('login.html', error='Incorrect password')
     return render_template('login.html')
 
-@app.route('/logout')
+@app.route('/logout', methods=['POST'])
 def logout():
     session.pop('logged_in', None)
+    session.pop('_csrf_token', None)
     return redirect(url_for('index'))
 
 @app.route('/')
@@ -1343,18 +1399,50 @@ def index():
             conn.commit()
         
         total_games = conn.execute('SELECT COUNT(*) as count FROM games').fetchone()['count']
+        next_game = conn.execute('''
+            SELECT * FROM games
+            WHERE date >= date('now')
+                AND (is_abandoned IS NULL OR is_abandoned = 0)
+            ORDER BY date ASC
+            LIMIT 1
+        ''').fetchone()
+        next_game_summary = None
+        if next_game:
+            summary = conn.execute('''
+                SELECT
+                    COUNT(CASE WHEN a.status = 'playing' THEN 1 END) AS playing_count,
+                    COUNT(CASE WHEN a.status = 'maybe' THEN 1 END) AS maybe_count,
+                    COUNT(CASE WHEN a.status = 'playing' AND COALESCE(a.paid, 0) = 1 THEN 1 END) AS paid_count
+                FROM attendance a
+                WHERE a.game_id = ?
+            ''', (next_game['id'],)).fetchone()
+            next_game_summary = {
+                'id': next_game['id'],
+                'date': next_game['date'],
+                'location': next_game['location'],
+                'playing_count': summary['playing_count'] or 0,
+                'maybe_count': summary['maybe_count'] or 0,
+                'paid_count': summary['paid_count'] or 0,
+            }
         games = conn.execute(
             'SELECT * FROM games ORDER BY date DESC LIMIT ? OFFSET ?',
             (per_page, offset)
         ).fetchall()
         
+        game_ids = [game['id'] for game in games]
+        attendance_by_game = {}
+        if game_ids:
+            placeholders = ','.join('?' for _ in game_ids)
+            attendance_rows = conn.execute(f'''
+                SELECT game_id, COUNT(*) AS count
+                FROM attendance
+                WHERE status = 'playing' AND game_id IN ({placeholders})
+                GROUP BY game_id
+            ''', game_ids).fetchall()
+            attendance_by_game = {row['game_id']: row['count'] for row in attendance_rows}
+
         game_data = []
         for game in games:
-            attendance = conn.execute('''
-                SELECT COUNT(*) as count 
-                FROM attendance 
-                WHERE game_id = ? AND status = 'playing'
-            ''', (game['id'],)).fetchone()
             
             # Safely get score fields (may not exist in older databases)
             try:
@@ -1369,7 +1457,7 @@ def index():
                 'date': game['date'],
                 'location': game['location'],
                 'notes': game['notes'],
-                'players_count': attendance['count'] if attendance else 0,
+                'players_count': attendance_by_game.get(game['id'], 0),
                 'team1_score': team1_score,
                 'team2_score': team2_score,
                 'is_abandoned': game['is_abandoned'] if 'is_abandoned' in game.keys() else 0
@@ -1385,6 +1473,7 @@ def index():
         page=page,
         has_prev=has_prev,
         has_next=has_next
+        ,next_game=next_game_summary
     )
 
 @app.route('/admin')
@@ -1436,10 +1525,13 @@ def admin_games():
                 (per_page, offset)
             ).fetchall()
         
-        game_data = []
-        for game in games:
-            attendance = conn.execute('''
+        game_ids = [game['id'] for game in games]
+        attendance_by_game = {}
+        if game_ids:
+            placeholders = ','.join('?' for _ in game_ids)
+            attendance_rows = conn.execute(f'''
                 SELECT
+                    a.game_id,
                     COUNT(*) as players_count,
                     SUM(CASE
                         WHEN COALESCE(p.payment_exempt, 0) = 0
@@ -1448,8 +1540,14 @@ def admin_games():
                     END) as unpaid_count
                 FROM attendance a
                 JOIN players p ON p.id = a.player_id
-                WHERE a.game_id = ? AND a.status = 'playing'
-            ''', (game['id'],)).fetchone()
+                WHERE a.game_id IN ({placeholders}) AND a.status = 'playing'
+                GROUP BY a.game_id
+            ''', game_ids).fetchall()
+            attendance_by_game = {row['game_id']: row for row in attendance_rows}
+
+        game_data = []
+        for game in games:
+            attendance = attendance_by_game.get(game['id'])
             
             game_data.append({
                 'id': game['id'],
@@ -2183,6 +2281,7 @@ def help_page():
 
 
 @app.route('/stickers', methods=['GET', 'POST'])
+@login_required
 def stickers():
     if not stickers_enabled():
         return redirect(url_for('index'))
@@ -2228,6 +2327,7 @@ def stickers():
 
 
 @app.route('/stickers/open', methods=['POST'])
+@login_required
 def open_sticker_packet():
     if not stickers_enabled():
         return redirect(url_for('index'))
@@ -2479,6 +2579,7 @@ def wall_of_praise_shield_png():
     return response
 
 @app.route('/players/add', methods=['GET', 'POST'])
+@login_required
 def add_player():
     if request.method == 'POST':
         name = request.form['name']
@@ -3089,6 +3190,7 @@ def merge_players():
     return redirect(url_for('admin_players'))
 
 @app.route('/games/add', methods=['GET', 'POST'])
+@login_required
 def add_game():
     if request.method == 'POST':
         date = request.form['date']
@@ -3214,6 +3316,7 @@ def game_detail(game_id):
                          weekly_payment_amount=weekly_payment_amount)
 
 @app.route('/games/<int:game_id>/teams')
+@login_required
 def generate_teams(game_id):
     import random
 

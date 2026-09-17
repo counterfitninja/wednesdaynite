@@ -18,6 +18,7 @@
 <div class="card">
     <h2>1) Upload or Receive Image</h2>
     <form method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="game_id" value="{{ selected_game_id or '' }}">
         <div class="form-group">
             <label for="image">Player List Image</label>
@@ -59,6 +60,7 @@
         <div id="extract-status" style="display: none; margin-bottom: 12px; padding: 10px; border-radius: 4px;"></div>
 
         <form method="POST" id="attendance-form" action="{% if selected_game_id %}/games/{{ selected_game_id }}/bulk-attendance{% else %}#{% endif %}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label for="game_id">Game</label>
                 <select id="game_id" required>

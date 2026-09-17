@@ -17,6 +17,7 @@
     <h2>🔔 Notification Settings</h2>
     
     <form method="POST">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div style="margin-bottom: 20px;">
             <label for="weekly_payment_amount" style="display: block; font-weight: 600; margin-bottom: 8px;">Weekly payment amount per player (£)</label>
             <input

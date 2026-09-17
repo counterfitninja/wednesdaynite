@@ -68,6 +68,14 @@ pip install gunicorn
 gunicorn app:app --bind 0.0.0.0:5000
 ```
 
+## Running Tests
+
+Run the isolated regression suite from the repository root:
+
+```powershell
+pytest
+```
+
 ## Environment Variables
 - `ADMIN_PASSWORD` — admin login password.
 	- If missing locally, app falls back to default password (`football2026`).

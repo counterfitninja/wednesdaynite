@@ -22,6 +22,7 @@
     <h1>Edit Game</h1>
     
     <form method="POST" action="/games/{{ game.id }}/edit">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div class="form-group">
             <label for="date">Date *</label>
             <input type="date" id="date" name="date" value="{{ game.date }}" required>

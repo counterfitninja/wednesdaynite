@@ -11,6 +11,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="WNFC">
     <link rel="apple-touch-icon" href="/static/wn.png">
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
     <title>{% block title %}Wednesday Night FC{% endblock %}</title>
     <style>
         * {
@@ -546,7 +547,10 @@
                 <a href="/payments/paypal-check">PayPal Check</a>
                 <a href="/admin/games">Teams</a>
                 <a href="/admin/settings">Settings</a>
-                <a href="/logout" style="color: #e74c3c;">Logout</a>
+                <form method="POST" action="{{ url_for('logout') }}" style="display: inline;">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" style="color: #e74c3c; background: none; border: 0; cursor: pointer; padding: 8px 14px;">Logout</button>
+                </form>
                 {% endif %}
             </nav>
         </div>
@@ -577,6 +581,13 @@
     </script>
     
     <div class="container">
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div role="status" aria-live="polite">
+            {% for message in messages %}<p class="alert">{{ message }}</p>{% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
         {% block content %}{% endblock %}
     </div>
     

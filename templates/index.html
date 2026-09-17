@@ -14,7 +14,10 @@
         <a href="/help" class="btn">❓ Help</a>
         {% if is_admin %}
             <a href="/admin" class="btn btn-success">Admin Panel</a>
-            <a href="/logout" class="btn">Logout</a>
+            <form method="POST" action="{{ url_for('logout') }}" style="display: inline;">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn">Logout</button>
+            </form>
         {% else %}
             <a href="/login" class="btn">Admin Login</a>
         {% endif %}
@@ -26,6 +29,18 @@
         <strong>📅 Weekly Schedule:</strong> Every Wednesday at 9pm • Selwood School
     </p>
 </div>
+
+{% if next_game %}
+<section class="card next-match-card" aria-labelledby="next-match-title">
+    <h2 id="next-match-title">Next Match</h2>
+    <p><strong>{{ next_game.date|ukdate }}</strong> · {{ next_game.location or 'Location to be confirmed' }}</p>
+    <p aria-label="Attendance summary">{{ next_game.playing_count }} playing · {{ next_game.maybe_count }} maybe · {{ next_game.paid_count }} paid</p>
+    <div class="action-bar-btns">
+        <a href="/games/{{ next_game.id }}" class="btn btn-success">Manage attendance</a>
+        <a href="/games/{{ next_game.id }}/teams" class="btn">View teams</a>
+    </div>
+</section>
+{% endif %}
 
 {% if games %}
 <div class="card">

@@ -21,6 +21,7 @@
 <div class="card">
     <h2>Upload / Replace Face</h2>
     <form method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div class="form-group">
             <label for="player_id">Player</label>
             <select id="player_id" name="player_id" required>

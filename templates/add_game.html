@@ -7,6 +7,7 @@
 
 <div class="card">
     <form method="POST">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div class="form-group">
             <label for="date">Date *</label>
             <input type="date" id="date" name="date" required>

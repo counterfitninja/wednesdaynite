@@ -1,53 +1,80 @@
-# Admin Games Unpaid Count
+# Wednesday Night FC Improvement Backlog
 
-- [x] Reuse existing payment rules to calculate unpaid playing players per game.
-- [x] Display the unpaid count on the admin games screen.
-- [x] Run focused validation and review the final diff.
+Prioritized backlog based on the codebase and UI review. Work from top to bottom unless a task is intentionally deferred.
 
-## Review
+## Phase 1 — Safety and foundations
 
-- Added an `unpaid_count` to each admin game row, excluding payment-exempt players and paid attendance.
-- Validation: `python -m py_compile app.py` passed; authenticated Flask test request returned HTTP 200 and rendered the `Unpaid` column.
+- [ ] Remove password-related debug logging from the login flow.
+- [ ] Add CSRF protection to all state-changing forms and POST routes.
+- [ ] Configure secure session cookies and validate the login `next` URL.
+- [ ] Replace `print()` diagnostics with structured application logging.
+- [ ] Add basic error pages for 403, 404, and 500 responses.
+- [ ] Add focused automated tests for authentication, attendance, scores, payments, teams, imports, and abandoned games.
+- [ ] Replace homepage/admin game-list N+1 attendance queries with grouped aggregate queries.
 
-# Sticker Packet Feature
+## Phase 2 — Matchday experience
 
-- [x] Add sticker player data model and image storage helpers.
-- [x] Build routes to manage uploads and open a six-player packet.
-- [x] Create the sticker packet page with upload form and reveal UI.
-- [x] Link the feature from navigation/help text.
-- [x] Run focused validation and note results.
+- [ ] Redesign the home page as a matchday dashboard centered on the next game.
+- [ ] Add next-match details, attendance counts, payment status, and primary matchday actions.
+- [ ] Add quick actions for attendance, teams, final score, leaderboard, and help.
+- [ ] Restructure the game detail page into clear Attendance, Payments, Teams, and Result sections.
+- [ ] Add a sticky mobile match summary and action bar to the game detail page.
+- [ ] Add clear success, error, loading, and empty-state feedback to admin workflows.
 
-## Review
+## Phase 3 — Navigation and responsive UI
 
-- Added `/stickers` for uploads and album management, backed by a new `sticker_players` table.
-- Added `/stickers/open` to generate a six-card packet with one guaranteed shiny and random stats.
-- Validation: editor diagnostics clean for touched files; `python -m py_compile app.py` passed.
+- [ ] Simplify the main navigation into Matchday, Stats, and Admin groups.
+- [ ] Rename or fix confusing navigation labels, especially the visible `Teams` link.
+- [ ] Add a mobile-friendly navigation pattern for Home, Games, Stats, and Admin.
+- [ ] Replace key mobile tables with responsive cards where appropriate.
+- [ ] Improve the admin games view for mobile-first scanning and actions.
+- [ ] Add visible focus states, semantic landmarks, keyboard support, and accessible form errors.
+- [ ] Ensure status and team colors are not the only way information is communicated.
 
-# Season Momentum Stat
+## Phase 4 — Shared visual system
 
-- [x] Add reusable momentum calculator using last 8 weeks vs season win rate.
-- [x] Add `/stats/momentum` route with leaderboard-style trend table and highlights.
-- [x] Add a "Hot right now" stat card and row badge to main wins leaderboard.
-- [x] Link momentum page from base nav and all stats quick-nav bars.
-- [x] Run focused validation and note results.
+- [ ] Move repeated inline styles from templates into `static/app.css`.
+- [ ] Define shared color, spacing, typography, button, badge, card, table, and form styles.
+- [ ] Create reusable template partials for page headers, alerts, pagination, empty states, and status badges.
+- [ ] Standardize button hierarchy and terminology across public and admin pages.
+- [ ] Add concise helper text below settings and controls where behavior is not obvious.
 
-## Review
+## Phase 5 — Team and attendance workflows
 
-- Added `build_momentum_table(...)` to compute season and recent form deltas for each player.
-- Added `/stats/momentum` page with top hot/cooling highlights and per-player momentum table.
-- Added leaderboard integration: top momentum card + `🔥 Hot` badge on players trending up.
-- Validation: `python -m py_compile app.py` passed; editor diagnostics show no errors on touched files.
+- [ ] Make manual team assignment usable without drag and drop on mobile.
+- [ ] Add explicit move-to-team, unassign, and optional swap controls.
+- [ ] Show live team player counts, skill totals, and balance difference.
+- [ ] Add attendance editing controls that are easier to use than large multi-select lists.
+- [ ] Add undo or safer recovery for destructive player/game actions.
 
-# Form Guide (Last 5)
+## Phase 6 — Backend maintainability
 
-- [x] Add leaderboard-side query logic to compute each player's last five scored outcomes (W/D/L).
-- [x] Pass a per-player form guide map into leaderboard template rendering.
-- [x] Add a new `Form (L5)` column with compact W/D/L dots in the wins table.
-- [x] Keep leaderboard sorting behavior unchanged.
-- [x] Run focused validation and note results.
+- [ ] Split `app.py` into blueprints, database helpers, route modules, and service modules.
+- [ ] Extract team balancing, statistics, OCR, payment, and image-processing logic into services.
+- [ ] Introduce a lightweight versioned migration system instead of growing `init_db()` conditionals.
+- [ ] Enable SQLite foreign keys and review cascade/delete behavior.
+- [ ] Add an application factory and test database configuration.
+- [ ] Add request and database timing instrumentation for slow pages.
 
-## Review
+## Phase 7 — PWA, notifications, and deployment
 
-- Added leaderboard form computation in `leaderboard()` by scanning scored, non-abandoned games for the current year and retaining the latest five results per player.
-- Added a `Form (L5)` wins-table column in `leaderboard.html` with color-coded circles for `W`, `D`, and `L`.
-- Validation: `python -m py_compile app.py` passed; editor diagnostics show no errors on touched files.
+- [ ] Replace browser-only timer reminders with reliable scheduled or Web Push notifications.
+- [ ] Request notification permission only after an explicit user action.
+- [ ] Improve service-worker cache versioning, activation cleanup, and offline fallback behavior.
+- [ ] Separate optional OCR dependencies from the default production requirements if practical.
+- [ ] Add an admin backup/export workflow and document restore verification.
+
+## Review checklist
+
+- [ ] Run focused regression tests after each feature group.
+- [ ] Test desktop and mobile layouts at representative widths.
+- [ ] Run `python -m py_compile app.py` and editor diagnostics.
+- [ ] Run `git diff --check`.
+- [ ] Update `README.md`, `HOW_IT_WORKS.md`, and `CHANGELOG.md` when behavior changes.
+
+## Completed work archive
+
+- Admin games unpaid count.
+- Sticker packet feature.
+- Season momentum statistic.
+- Leaderboard form guide for the last five games.

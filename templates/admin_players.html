@@ -42,6 +42,7 @@
     <h3 style="color: #856404;">🔀 Merge Players</h3>
     <p style="color: #856404; margin-bottom: 15px;">Merge duplicate players (e.g., wrong spelling). All attendance records from the source player will be moved to the target player, then the source player will be deleted.</p>
     <form method="POST" action="/players/merge" onsubmit="return confirmMerge();">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div class="merge-selects" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
             <div class="form-group">
                 <label style="color: #856404;"><strong>Source Player (will be deleted)</strong></label>
@@ -96,6 +97,7 @@ function confirmMerge() {
         Choose who made the one-off contribution for the new ball. This list powers the public Wall of Praise page.
     </p>
     <form method="POST" action="/admin/wall-of-praise/contributors">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 12px; margin-bottom: 14px;">
             {% for player in players %}
             <label style="display: flex; align-items: center; gap: 8px; padding: 6px 0;">
@@ -122,6 +124,7 @@ function confirmMerge() {
     <p style="margin-bottom: 10px; color: #27ae60; font-weight: 600;">Custom shield is active.</p>
     {% endif %}
     <form method="POST" action="/admin/wall-of-praise/shield-upload" enctype="multipart/form-data">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div class="form-group" style="max-width: 460px;">
             <label for="shield_file"><strong>Shield file</strong></label>
             <input id="shield_file" type="file" name="shield_file" accept=".png,.jpg,.jpeg,.webp,.svg" required>
@@ -201,6 +204,7 @@ function confirmMerge() {
                     <a href="/players/{{ player.id }}/payments" class="btn" style="padding: 5px 10px; font-size: 0.9em; margin-right: 5px; background-color: #2c3e50;">Payments</a>
                     <a href="/players/{{ player.id }}/edit" class="btn" style="padding: 5px 10px; font-size: 0.9em; margin-right: 5px;">Edit</a>
                     <form action="/players/{{ player.id }}/delete" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete {{ player.name }}? This will also delete all their attendance records.');">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-danger" style="padding: 5px 10px; font-size: 0.9em;">Delete</button>
                     </form>
                 </td>

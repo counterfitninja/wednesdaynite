@@ -84,6 +84,7 @@
                 <td>£{{ "%.2f"|format(txn.amount) }}</td>
                 <td>
                     <form method="POST" action="/payments/paypal-transactions/{{ txn.id }}/assign" style="display: flex; gap: 8px;">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                         <select name="player_id" required>
                             <option value="">Select player…</option>
                             {% for p in all_players %}
