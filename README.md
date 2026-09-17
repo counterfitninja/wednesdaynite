@@ -46,6 +46,11 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+The application removes known EasyOCR/Torch model-cache directories at startup. The
+next dependency installation will not reinstall those packages because they are no
+longer listed in `requirements.txt`. If the server environment already has the old
+packages installed, remove them once with `pip uninstall -y easyocr torch torchvision`.
+
 4. Set environment variables (recommended):
 
 ```powershell

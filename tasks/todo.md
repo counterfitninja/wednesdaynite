@@ -62,6 +62,7 @@ Prioritized backlog based on the codebase and UI review. Work from top to bottom
 - [ ] Request notification permission only after an explicit user action.
 - [ ] Improve service-worker cache versioning, activation cleanup, and offline fallback behavior.
 - [x] Remove server-side OCR and heavyweight OCR model dependencies; keep image extraction browser-only with text fallback.
+- [x] Remove known retired OCR model caches during application startup.
 - [ ] Add an admin backup/export workflow and document restore verification.
 
 ## Review checklist

@@ -7,11 +7,39 @@ import secrets
 import base64
 import re
 import logging
+import shutil
 from functools import wraps
 import html
 from io import BytesIO
 from urllib.parse import urlparse
 from PIL import Image, ImageDraw, ImageFont, UnidentifiedImageError
+
+
+def cleanup_removed_ocr_artifacts():
+    """Remove model caches left by the retired server-side OCR feature."""
+    home = os.path.expanduser('~')
+    cache_roots = {
+        os.path.join(home, '.EasyOCR'),
+        os.path.join(home, '.cache', 'easyocr'),
+        os.path.join(home, '.cache', 'torch'),
+        os.path.join(os.getcwd(), '.EasyOCR'),
+        os.path.join(os.getcwd(), '.cache', 'easyocr'),
+        os.path.join(os.getcwd(), '.cache', 'torch'),
+    }
+
+    for cache_path in cache_roots:
+        if not os.path.isdir(cache_path):
+            continue
+        try:
+            shutil.rmtree(cache_path)
+            logging.getLogger(__name__).info('Removed retired OCR cache: %s', cache_path)
+        except OSError:
+            logging.getLogger(__name__).warning(
+                'Could not remove retired OCR cache: %s', cache_path, exc_info=True
+            )
+
+
+cleanup_removed_ocr_artifacts()
 
 app = Flask(__name__)
 configured_secret = os.environ.get('SECRET_KEY')
