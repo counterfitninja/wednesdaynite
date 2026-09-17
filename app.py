@@ -5,6 +5,7 @@ import os
 import random
 import secrets
 import base64
+import hashlib
 import re
 import logging
 import shutil
@@ -565,26 +566,57 @@ def inject_security_context():
     return {'csrf_token': get_csrf_token}
 
 
+def csrf_fingerprint(value):
+    """Return a safe short identifier for comparing CSRF values in logs."""
+    if not value:
+        return '-'
+    return hashlib.sha256(value.encode('utf-8')).hexdigest()[:12]
+
+
 @app.before_request
 def validate_csrf_for_state_changes():
     if request.method not in {'POST', 'PUT', 'PATCH', 'DELETE'}:
         return None
-    supplied = request.form.get('_csrf_token') or request.headers.get('X-CSRFToken')
+    form_token = request.form.get('_csrf_token')
+    header_token = request.headers.get('X-CSRFToken')
+    supplied = form_token or header_token
     expected = session.get('_csrf_token')
+    source = 'form' if form_token else 'header' if header_token else 'missing'
     valid = bool(expected and supplied and secrets.compare_digest(supplied, expected))
+    validation = 'session-match' if valid else 'not-checked'
     if not valid and supplied:
         try:
             csrf_serializer.loads(supplied, max_age=12 * 60 * 60)
             valid = True
+            validation = 'signed-token'
         except (BadSignature, SignatureExpired):
             valid = False
+            validation = 'invalid-signed-token'
+    logger.info(
+        'CSRF request: method=%s path=%s source=%s valid=%s validation=%s '
+        'supplied_fp=%s expected_fp=%s supplied_len=%s expected_len=%s '
+        'session_cookie=%s logged_in=%s content_type=%s user_agent=%s referer=%s',
+        request.method,
+        request.path,
+        source,
+        valid,
+        validation,
+        csrf_fingerprint(supplied),
+        csrf_fingerprint(expected),
+        len(supplied) if supplied else 0,
+        len(expected) if expected else 0,
+        bool(request.cookies.get(app.config['SESSION_COOKIE_NAME'] or 'session')),
+        bool(session.get('logged_in')),
+        request.content_type or '-',
+        request.user_agent.string[:160] or '-',
+        request.referrer or '-',
+    )
     if not valid:
         logger.warning(
-            'CSRF validation failed: path=%s expected=%s supplied=%s session=%s',
-            request.path,
-            bool(expected),
-            bool(supplied),
-            bool(session),
+            'CSRF validation failed: method=%s path=%s source=%s validation=%s '
+            'session_keys=%s session_cookie_name=%s',
+            request.method, request.path, source, validation,
+            sorted(session.keys()), app.config['SESSION_COOKIE_NAME'] or 'session',
         )
         abort(403)
     return None
