@@ -27,3 +27,9 @@ def test_bulk_attendance_confirmation_accepts_csrf(client):
         data={'_csrf_token': token},
     )
     assert response.status_code in (301, 302)
+
+
+def test_bulk_attendance_confirmation_rejects_missing_csrf(client):
+    login(client)
+    response = client.post('/games/999999/bulk-attendance-confirm')
+    assert response.status_code == 403

@@ -539,9 +539,14 @@ function confirmBulkMatches() {
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = '/games/{{ game.id }}/bulk-attendance-confirm';
-    const csrf = document.createElement('input');
-    csrf.type = 'hidden'; csrf.name = '_csrf_token'; csrf.value = '{{ csrf_token() }}';
-    form.appendChild(csrf);
+    // Reuse the token from the original server-rendered form. This guarantees
+    // the dynamically submitted form uses the same session token as the page.
+    const csrf = _bulkForm && _bulkForm.querySelector('input[name="_csrf_token"]');
+    if (!csrf) {
+        alert('Security token unavailable. Please refresh the page and try again.');
+        return;
+    }
+    form.appendChild(csrf.cloneNode(true));
     playerIds.forEach(id => {
         const inp = document.createElement('input');
         inp.type = 'hidden'; inp.name = 'player_ids'; inp.value = id;
