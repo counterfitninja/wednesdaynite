@@ -37,6 +37,17 @@ def test_bulk_attendance_confirmation_rejects_missing_csrf(client):
     assert response.status_code == 403
 
 
+def test_signed_csrf_token_survives_session_token_rotation(client):
+    token = login(client)
+    with client.session_transaction() as session:
+        session['_csrf_token'] = 'rotated-session-token'
+    response = client.post(
+        '/games/999999/bulk-attendance-confirm',
+        data={'_csrf_token': token},
+    )
+    assert response.status_code in (301, 302)
+
+
 def test_game_detail_bulk_form_contains_csrf_token(client):
     login(client)
     template = Path(__file__).resolve().parents[1] / 'templates' / 'game_detail.html'

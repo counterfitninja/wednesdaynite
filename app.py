@@ -12,6 +12,7 @@ from functools import wraps
 import html
 from io import BytesIO
 from urllib.parse import urlparse
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from PIL import Image, ImageDraw, ImageFont, UnidentifiedImageError
 
 
@@ -46,6 +47,7 @@ configured_secret = os.environ.get('SECRET_KEY')
 if not configured_secret and os.environ.get('WEBSITE_INSTANCE_ID'):
     raise ValueError('SECRET_KEY environment variable must be set in Azure')
 app.secret_key = configured_secret or 'change-this-to-something-secure-in-production'
+csrf_serializer = URLSafeTimedSerializer(app.secret_key, salt='wnfc-csrf')
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = bool(os.environ.get('WEBSITE_INSTANCE_ID'))
@@ -553,7 +555,7 @@ def is_safe_next_url(target):
 def get_csrf_token():
     token = session.get('_csrf_token')
     if not token:
-        token = secrets.token_urlsafe(32)
+        token = csrf_serializer.dumps(secrets.token_urlsafe(32))
         session['_csrf_token'] = token
     return token
 
@@ -569,7 +571,21 @@ def validate_csrf_for_state_changes():
         return None
     supplied = request.form.get('_csrf_token') or request.headers.get('X-CSRFToken')
     expected = session.get('_csrf_token')
-    if not expected or not supplied or not secrets.compare_digest(supplied, expected):
+    valid = bool(expected and supplied and secrets.compare_digest(supplied, expected))
+    if not valid and supplied:
+        try:
+            csrf_serializer.loads(supplied, max_age=12 * 60 * 60)
+            valid = True
+        except (BadSignature, SignatureExpired):
+            valid = False
+    if not valid:
+        logger.warning(
+            'CSRF validation failed: path=%s expected=%s supplied=%s session=%s',
+            request.path,
+            bool(expected),
+            bool(supplied),
+            bool(session),
+        )
         abort(403)
     return None
 
