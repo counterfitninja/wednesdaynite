@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from conftest import csrf_token, login
 
 
@@ -33,3 +35,11 @@ def test_bulk_attendance_confirmation_rejects_missing_csrf(client):
     login(client)
     response = client.post('/games/999999/bulk-attendance-confirm')
     assert response.status_code == 403
+
+
+def test_game_detail_bulk_form_contains_csrf_token(client):
+    login(client)
+    template = Path(__file__).resolve().parents[1] / 'templates' / 'game_detail.html'
+    source = template.read_text(encoding='utf-8')
+    assert 'name="_csrf_token" value="{{ csrf_token() }}"' in source
+    assert 'HTMLFormElement.prototype.submit.call(_bulkForm)' in source

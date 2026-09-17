@@ -536,29 +536,25 @@ function confirmBulkMatches() {
         else playerIds.push(val);
     });
 
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/games/{{ game.id }}/bulk-attendance-confirm';
-    // Reuse the token from the original server-rendered form. This guarantees
-    // the dynamically submitted form uses the same session token as the page.
-    const csrf = _bulkForm && _bulkForm.querySelector('input[name="_csrf_token"]');
-    if (!csrf) {
+    // Submit the original server-rendered form so its CSRF field and browser
+    // session remain together. Creating a second form can lose the token when
+    // the page is restored from browser/PWA state.
+    if (!_bulkForm) {
         alert('Security token unavailable. Please refresh the page and try again.');
         return;
     }
-    form.appendChild(csrf.cloneNode(true));
+    _bulkForm.action = '/games/{{ game.id }}/bulk-attendance-confirm';
     playerIds.forEach(id => {
         const inp = document.createElement('input');
         inp.type = 'hidden'; inp.name = 'player_ids'; inp.value = id;
-        form.appendChild(inp);
+        _bulkForm.appendChild(inp);
     });
     newNames.forEach(n => {
         const inp = document.createElement('input');
         inp.type = 'hidden'; inp.name = 'new_names'; inp.value = n;
-        form.appendChild(inp);
+        _bulkForm.appendChild(inp);
     });
-    document.body.appendChild(form);
-    form.submit();
+    HTMLFormElement.prototype.submit.call(_bulkForm);
 }
 </script>
 {% endblock %}
