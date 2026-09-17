@@ -61,7 +61,7 @@ Prioritized backlog based on the codebase and UI review. Work from top to bottom
 - [ ] Replace browser-only timer reminders with reliable scheduled or Web Push notifications.
 - [ ] Request notification permission only after an explicit user action.
 - [ ] Improve service-worker cache versioning, activation cleanup, and offline fallback behavior.
-- [ ] Separate optional OCR dependencies from the default production requirements if practical.
+- [x] Remove server-side OCR and heavyweight OCR model dependencies; keep image extraction browser-only with text fallback.
 - [ ] Add an admin backup/export workflow and document restore verification.
 
 ## Review checklist

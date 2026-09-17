@@ -6,6 +6,7 @@ This project loosely follows Keep a Changelog format and Semantic Versioning pri
 
 ## [Unreleased]
 ### Changed
+- Removed server-side OCR and its heavyweight EasyOCR/Torch dependencies. Image extraction now stays in the browser, with text paste as the fallback.
 - Attendance percentage now uses `playing / total non-abandoned games` in scope.
 - Leaderboard attendance calculations are year-based and use `playing / total non-abandoned games in year`.
 

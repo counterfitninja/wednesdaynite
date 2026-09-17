@@ -13,19 +13,6 @@ from io import BytesIO
 from urllib.parse import urlparse
 from PIL import Image, ImageDraw, ImageFont, UnidentifiedImageError
 
-try:
-    import easyocr
-except Exception as exc:
-    easyocr = None
-    _EASYOCR_IMPORT_ERROR = exc
-else:
-    _EASYOCR_IMPORT_ERROR = None
-
-try:
-    import numpy as np
-except Exception:
-    np = None
-
 app = Flask(__name__)
 configured_secret = os.environ.get('SECRET_KEY')
 if not configured_secret and os.environ.get('WEBSITE_INSTANCE_ID'):
@@ -589,9 +576,6 @@ NAME_STOP_WORDS = {
     'in', 'out', 'playing', 'not playing', 'available', 'unavailable', 'attending',
     'players', 'player', 'list', 'wednesday', 'night', 'fc', 'team', 'teams'
 }
-_EASYOCR_READER = None
-
-
 def image_file_to_data_url(file_storage):
     if not file_storage:
         raise ValueError('No image was provided.')
@@ -606,7 +590,7 @@ def image_file_to_data_url(file_storage):
         with Image.open(BytesIO(raw_bytes)) as image:
             image = image.convert('RGB')
 
-            # Keep OCR quick on mobile by limiting very large images.
+            # Keep browser-side extraction quick on mobile by limiting very large images.
             max_side = 1800
             if max(image.size) > max_side:
                 image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
@@ -619,100 +603,6 @@ def image_file_to_data_url(file_storage):
         raise ValueError('Uploaded file is not a valid image.') from exc
     except OSError as exc:
         raise ValueError('Could not read the uploaded image.') from exc
-
-
-def clean_name_candidate(line):
-    if not line:
-        return ''
-
-    value = re.sub(r"[•●▪◆⭐✨✅❌☑️🟢🟡🟠🔴]", ' ', str(line))
-    value = re.sub(r"^\s*\d+[\.)\-:]\s*", '', value)
-    value = re.sub(r"^\s*[-–—]\s*", '', value)
-    value = re.sub(r"\s*[-:,|]\s*(yes|no|maybe|in|out|playing|not playing)\s*$", '', value, flags=re.IGNORECASE)
-    value = re.sub(r"\s+", ' ', value).strip()
-
-    if not re.search(r"[A-Za-z]", value):
-        return ''
-    if len(value) < 2 or len(value) > 50:
-        return ''
-
-    value = re.sub(r"[^A-Za-z'\-.\s]", '', value)
-    value = re.sub(r"\s+", ' ', value).strip()
-    if not value:
-        return ''
-
-    if value.lower() in NAME_STOP_WORDS:
-        return ''
-
-    words = [w for w in value.split(' ') if w]
-    if len(words) > 4:
-        return ''
-
-    return value
-
-
-def extract_name_candidates_from_text(raw_text):
-    unique = {}
-    for line in str(raw_text or '').splitlines():
-        candidate = clean_name_candidate(line)
-        if not candidate:
-            continue
-        key = candidate.lower()
-        if key not in unique:
-            unique[key] = candidate
-    return list(unique.values())
-
-
-def decode_data_url_image(image_data_url):
-    if not image_data_url or ',' not in image_data_url:
-        raise ValueError('Invalid image data.')
-
-    header, encoded = image_data_url.split(',', 1)
-    if 'base64' not in header:
-        raise ValueError('Only base64 image data is supported.')
-
-    try:
-        raw_bytes = base64.b64decode(encoded, validate=True)
-    except Exception as exc:
-        raise ValueError('Could not decode the shared image data.') from exc
-
-    if len(raw_bytes) > MAX_SHARED_IMAGE_BYTES:
-        raise ValueError('Image is too large. Please use an image smaller than 8 MB.')
-    if not raw_bytes:
-        raise ValueError('Image data was empty.')
-
-    return raw_bytes
-
-
-def extract_names_via_server_ocr(raw_image_bytes):
-    if not easyocr or np is None:
-        raise RuntimeError(
-            'Server OCR dependency is not installed. Run pip install -r requirements.txt and restart the server.'
-        ) from _EASYOCR_IMPORT_ERROR
-
-    global _EASYOCR_READER
-    if _EASYOCR_READER is None:
-        _EASYOCR_READER = easyocr.Reader(['en'], gpu=False, verbose=False)
-
-    try:
-        with Image.open(BytesIO(raw_image_bytes)) as image:
-            image = image.convert('RGB')
-
-            # Upscale small screenshots to improve OCR quality.
-            if image.width < 1200:
-                scale = max(1, int(1200 / max(image.width, 1)))
-                if scale > 1:
-                    image = image.resize((image.width * scale, image.height * scale), Image.Resampling.LANCZOS)
-
-            image_array = np.array(image)
-            lines = _EASYOCR_READER.readtext(image_array, detail=0, paragraph=False)
-            text = '\n'.join(line for line in lines if line)
-    except UnidentifiedImageError as exc:
-        raise ValueError('Uploaded file is not a valid image.') from exc
-    except OSError as exc:
-        raise RuntimeError('Server OCR engine is unavailable.') from exc
-
-    return extract_name_candidates_from_text(text)
 
 
 def stickers_enabled():
@@ -3842,28 +3732,6 @@ def share_target():
         error=error
     )
 
-
-@app.route('/api/ocr/extract-names', methods=['POST'])
-@login_required
-def api_ocr_extract_names():
-    payload = request.get_json(silent=True) or {}
-    image_data_url = payload.get('image_data_url')
-
-    if not image_data_url:
-        return jsonify({'ok': False, 'error': 'Missing image data.'}), 400
-
-    try:
-        raw_bytes = decode_data_url_image(image_data_url)
-        names = extract_names_via_server_ocr(raw_bytes)
-    except ValueError as exc:
-        return jsonify({'ok': False, 'error': str(exc)}), 400
-    except RuntimeError as exc:
-        app.logger.warning('OCR extraction is unavailable.', exc_info=exc.__cause__ is not None)
-        return jsonify({'ok': False, 'error': str(exc)}), 503
-    except Exception:
-        return jsonify({'ok': False, 'error': 'Server OCR failed unexpectedly.'}), 500
-
-    return jsonify({'ok': True, 'names': names, 'count': len(names)})
 
 @app.route('/service-worker.js')
 def service_worker():

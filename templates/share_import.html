@@ -50,12 +50,11 @@
         <h2>3) Extract Names</h2>
         <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
             <button type="button" id="extract-btn" class="btn">Extract From Image</button>
-            <button type="button" id="extract-server-btn" class="btn" style="background: #455a64;">Extract On Server</button>
             <button type="button" id="extract-text-btn" class="btn" style="background: #607d8b;">Extract From Text</button>
             <button type="button" id="clear-btn" class="btn" style="background: #7f8c8d;">Clear</button>
         </div>
 
-        <p style="color: #7f8c8d; font-size: 0.9em; margin-bottom: 12px;">If browser extraction is unavailable, the app will automatically try server OCR.</p>
+        <p style="color: #7f8c8d; font-size: 0.9em; margin-bottom: 12px;">Image extraction runs in your browser. If it is unavailable, paste the player names into the text box instead.</p>
 
         <div id="extract-status" style="display: none; margin-bottom: 12px; padding: 10px; border-radius: 4px;"></div>
 
@@ -94,7 +93,6 @@
     const playersTextarea = document.getElementById('players_text');
     const extractStatus = document.getElementById('extract-status');
     const extractBtn = document.getElementById('extract-btn');
-    const extractServerBtn = document.getElementById('extract-server-btn');
     const extractTextBtn = document.getElementById('extract-text-btn');
     const clearBtn = document.getElementById('clear-btn');
     const imageDataUrl = {{ image_data_url|tojson }};
@@ -205,7 +203,7 @@
         }
 
         if (!('TextDetector' in window)) {
-            await extractFromServer('Browser OCR is not supported here. Trying server OCR...');
+            showStatus('Browser image extraction is not supported here. Paste the player names into the shared text box instead.', 'error');
             return;
         }
 
@@ -239,47 +237,9 @@
             mergeIntoTextarea(names);
             showStatus(`Extracted ${names.length} names.`, 'ok');
         } catch (error) {
-            await extractFromServer(`Browser extraction failed (${error.message}). Trying server OCR...`);
+            showStatus(`Browser image extraction failed (${error.message}). Paste the player names into the shared text box instead.`, 'error');
         } finally {
             extractBtn.disabled = false;
-        }
-    }
-
-    async function extractFromServer(initialMessage) {
-        if (!imageDataUrl) {
-            showStatus('No image data is loaded yet. Upload or share one first.', 'error');
-            return;
-        }
-
-        extractServerBtn.disabled = true;
-        showStatus(initialMessage || 'Running server OCR...', 'ok');
-
-        try {
-            const response = await fetch('/api/ocr/extract-names', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify({ image_data_url: imageDataUrl })
-            });
-
-            const data = await response.json();
-            if (!response.ok || !data.ok) {
-                throw new Error(data.error || 'Server OCR request failed');
-            }
-
-            if (!data.names || !data.names.length) {
-                showStatus('Server OCR ran but did not find clear names. Try a tighter crop.', 'error');
-                return;
-            }
-
-            mergeIntoTextarea(data.names);
-            showStatus(`Server OCR extracted ${data.count} names.`, 'ok');
-        } catch (error) {
-            showStatus(`Server OCR failed: ${error.message}`, 'error');
-        } finally {
-            extractServerBtn.disabled = false;
         }
     }
 

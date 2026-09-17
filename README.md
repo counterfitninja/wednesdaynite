@@ -12,6 +12,7 @@ Simple Flask app for managing weekly casual football games:
 - SQLite (local file DB)
 - Server-rendered HTML templates (Jinja)
 - Optional Gunicorn for deployment
+- Browser-based image text extraction where supported; the server does not run OCR models.
 
 ## Prerequisites
 - Python 3.10+ (recommended)
@@ -138,6 +139,7 @@ pytest
 - `/admin/settings` — notifications toggle
 - `/leaderboard` — wins + attendance leaderboards
 - `/import` — CSV import page
+- `/share-import` — browser-side image/text attendance import
 - `/healthz` or `/status` — health/version check
 
 ## Data Backup & Restore
