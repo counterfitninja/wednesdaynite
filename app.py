@@ -9,6 +9,7 @@ import hashlib
 import re
 import logging
 import shutil
+import tempfile
 from functools import wraps
 import html
 from io import BytesIO
@@ -499,7 +500,13 @@ def stats_balance():
 @app.route('/healthz')
 @app.route('/status')
 def healthcheck():
-    return {'status': 'ok', 'build_version': BUILD_VERSION, 'host': HOST, 'port': PORT}
+    try:
+        with get_db() as conn:
+            conn.execute('SELECT 1').fetchone()
+    except sqlite3.Error:
+        logger.warning('Health check failed: database unavailable')
+        return {'status': 'degraded', 'build_version': BUILD_VERSION}, 503
+    return {'status': 'ok', 'build_version': BUILD_VERSION}
 
 
 @app.errorhandler(403)
@@ -557,6 +564,11 @@ def is_safe_next_url(target):
     return not parsed.scheme and not parsed.netloc and target.startswith('/') and not target.startswith('//')
 
 
+def safe_local_referrer(default_endpoint):
+    referrer = request.referrer
+    return referrer if is_safe_next_url(referrer) else url_for(default_endpoint)
+
+
 def get_csrf_token():
     token = session.get('_csrf_token')
     if not token:
@@ -587,19 +599,10 @@ def validate_csrf_for_state_changes():
     expected = session.get('_csrf_token')
     source = 'form' if form_token else 'header' if header_token else 'missing'
     valid = bool(expected and supplied and secrets.compare_digest(supplied, expected))
-    validation = 'session-match' if valid else 'not-checked'
-    if not valid and supplied:
-        try:
-            csrf_serializer.loads(supplied, max_age=12 * 60 * 60)
-            valid = True
-            validation = 'signed-token'
-        except (BadSignature, SignatureExpired):
-            valid = False
-            validation = 'invalid-signed-token'
+    validation = 'session-match' if valid else 'session-mismatch'
     logger.info(
         'CSRF request: method=%s path=%s source=%s valid=%s validation=%s '
-        'supplied_fp=%s expected_fp=%s supplied_len=%s expected_len=%s '
-        'session_cookie=%s logged_in=%s content_type=%s user_agent=%s referer=%s',
+        'supplied_fp=%s expected_fp=%s supplied_len=%s expected_len=%s logged_in=%s',
         request.method,
         request.path,
         source,
@@ -609,18 +612,12 @@ def validate_csrf_for_state_changes():
         csrf_fingerprint(expected),
         len(supplied) if supplied else 0,
         len(expected) if expected else 0,
-        bool(request.cookies.get(app.config['SESSION_COOKIE_NAME'] or 'session')),
         bool(session.get('logged_in')),
-        request.content_type or '-',
-        request.user_agent.string[:160] or '-',
-        request.referrer or '-',
     )
     if not valid:
         logger.warning(
-            'CSRF validation failed: method=%s path=%s source=%s validation=%s '
-            'session_keys=%s session_cookie_name=%s',
+            'CSRF validation failed: method=%s path=%s source=%s validation=%s',
             request.method, request.path, source, validation,
-            sorted(session.keys()), app.config['SESSION_COOKIE_NAME'] or 'session',
         )
         abort(403)
     return None
@@ -651,6 +648,9 @@ def get_bool_setting(conn, key, default=False):
 
 
 MAX_SHARED_IMAGE_BYTES = 8 * 1024 * 1024
+MAX_IMPORT_BYTES = 4 * 1024 * 1024
+MAX_IMPORT_ROWS = 500
+MAX_IMPORT_FIELD_LENGTH = 160
 NAME_STOP_WORDS = {
     'yes', 'no', 'maybe', 'responded', 'response', 'responses', 'poll', 'vote', 'votes',
     'in', 'out', 'playing', 'not playing', 'available', 'unavailable', 'attending',
@@ -901,11 +901,6 @@ def save_custom_shield(upload_file):
 
     os.makedirs(_wall_asset_dir(), exist_ok=True)
 
-    for existing in ('custom_shield.png', 'custom_shield.svg'):
-        existing_path = os.path.join(_wall_asset_dir(), existing)
-        if os.path.exists(existing_path):
-            os.remove(existing_path)
-
     upload_file.stream.seek(0)
     payload = upload_file.stream.read()
     if len(payload) > CUSTOM_SHIELD_MAX_BYTES:
@@ -917,11 +912,18 @@ def save_custom_shield(upload_file):
         except UnicodeDecodeError:
             return False, 'Invalid SVG file encoding.'
 
-        if '<svg' not in decoded.lower():
+        lowered = decoded.lower()
+        if '<svg' not in lowered or any(token in lowered for token in ('<script', ' onload=', ' onclick=', 'javascript:')):
             return False, 'Invalid SVG file content.'
 
-        with open(os.path.join(_wall_asset_dir(), 'custom_shield.svg'), 'w', encoding='utf-8') as shield_file:
+        with tempfile.NamedTemporaryFile('w', encoding='utf-8', suffix='.svg', dir=_wall_asset_dir(), delete=False) as shield_file:
             shield_file.write(decoded)
+            temp_path = shield_file.name
+        target_path = os.path.join(_wall_asset_dir(), 'custom_shield.svg')
+        os.replace(temp_path, target_path)
+        old_png = os.path.join(_wall_asset_dir(), 'custom_shield.png')
+        if os.path.exists(old_png):
+            os.remove(old_png)
         return True, 'Custom shield uploaded.'
 
     try:
@@ -933,7 +935,13 @@ def save_custom_shield(upload_file):
 
         max_dimension = 2400
         processed.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
-        processed.save(os.path.join(_wall_asset_dir(), 'custom_shield.png'), format='PNG')
+        with tempfile.NamedTemporaryFile(suffix='.png', dir=_wall_asset_dir(), delete=False) as output_file:
+            temp_path = output_file.name
+        processed.save(temp_path, format='PNG')
+        os.replace(temp_path, os.path.join(_wall_asset_dir(), 'custom_shield.png'))
+        old_svg = os.path.join(_wall_asset_dir(), 'custom_shield.svg')
+        if os.path.exists(old_svg):
+            os.remove(old_svg)
         return True, 'Custom shield uploaded.'
     except UnidentifiedImageError:
         return False, 'Invalid image file. Please upload a valid PNG/JPG/WEBP/SVG.'
@@ -965,12 +973,8 @@ def save_player_face(player_id, upload_file):
 
     os.makedirs(_face_storage_dir(), exist_ok=True)
 
-    for ext in ALLOWED_FACE_EXTENSIONS:
-        old_path = os.path.join(_face_storage_dir(), f'{player_id}.{ext}')
-        if os.path.exists(old_path):
-            os.remove(old_path)
-
     save_path = os.path.join(_face_storage_dir(), f'{player_id}.webp')
+    temp_path = None
 
     try:
         upload_file.stream.seek(0)
@@ -981,10 +985,19 @@ def save_player_face(player_id, upload_file):
                 processed = img.convert('RGB')
 
             processed.thumbnail((FACE_IMAGE_MAX_DIMENSION, FACE_IMAGE_MAX_DIMENSION), Image.Resampling.LANCZOS)
-            processed.save(save_path, format='WEBP', quality=FACE_IMAGE_WEBP_QUALITY, method=6)
+            with tempfile.NamedTemporaryFile(suffix='.webp', dir=_face_storage_dir(), delete=False) as output_file:
+                temp_path = output_file.name
+            processed.save(temp_path, format='WEBP', quality=FACE_IMAGE_WEBP_QUALITY, method=6)
+        os.replace(temp_path, save_path)
+        for ext in ALLOWED_FACE_EXTENSIONS:
+            old_path = os.path.join(_face_storage_dir(), f'{player_id}.{ext}')
+            if old_path != save_path and os.path.exists(old_path):
+                os.remove(old_path)
     except UnidentifiedImageError:
         return False, 'Invalid image file. Please upload a valid image.'
     except Exception:
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
         return False, 'Could not process image. Please try a different file.'
 
     return True, 'Face image uploaded and optimized.'
@@ -1324,12 +1337,16 @@ def login():
     if request.method == 'POST':
         password = request.form.get('password')
         if password == ADMIN_PASSWORD:
+            session.clear()
             session.permanent = True
             session['logged_in'] = True
+            get_csrf_token()
+            logger.info('Authentication event: event=login outcome=success')
             requested_next = request.args.get('next')
             next_url = requested_next if is_safe_next_url(requested_next) else url_for('admin')
             return redirect(next_url)
         else:
+            logger.info('Authentication event: event=login outcome=failure')
             return render_template('login.html', error='Incorrect password')
     return render_template('login.html')
 
@@ -1337,6 +1354,7 @@ def login():
 def logout():
     session.pop('logged_in', None)
     session.pop('_csrf_token', None)
+    logger.info('Authentication event: event=logout outcome=success')
     return redirect(url_for('index'))
 
 @app.route('/')
@@ -1349,7 +1367,8 @@ def index():
     offset = (page - 1) * per_page
     
     with get_db() as conn:
-        # Auto-create next Wednesday game if it doesn't exist
+        # Auto-create next Wednesday game if it doesn't exist. This is retained
+        # for the established weekly workflow; reads never create arbitrary games.
         today = datetime.now()
         days_until_wednesday = (2 - today.weekday()) % 7  # 2 = Wednesday (0=Monday)
         if days_until_wednesday == 0 and today.hour >= 21:  # After 9pm Wednesday, create next week
@@ -2575,6 +2594,7 @@ def add_player():
     return render_template('add_player.html')
 
 @app.route('/players/<int:player_id>/edit', methods=['GET', 'POST'])
+@login_required
 def edit_player(player_id):
     with get_db() as conn:
         if request.method == 'POST':
@@ -2954,7 +2974,10 @@ def paypal_import():
             import csv
             import io
 
-            stream = io.StringIO(file.stream.read().decode('utf-8-sig'), newline=None)
+            payload = file.stream.read(MAX_IMPORT_BYTES + 1)
+            if len(payload) > MAX_IMPORT_BYTES:
+                return render_template('paypal_import.html', error='Import file is too large.')
+            stream = io.StringIO(payload.decode('utf-8-sig'), newline=None)
             csv_reader = csv.DictReader(stream)
 
             with get_db() as conn:
@@ -2966,8 +2989,12 @@ def paypal_import():
                 'paypal_import.html',
                 success=f'Imported {imported} transactions ({matched} matched to players, {unmatched} need review). {skipped} rows skipped.'
             )
-        except Exception as e:
-            return render_template('paypal_import.html', error=f'Import failed: {str(e)}')
+        except (UnicodeDecodeError, csv.Error, ValueError, sqlite3.Error):
+            logger.warning('PayPal import rejected: validation or database error')
+            return render_template('paypal_import.html', error='Import failed. Check the file format and try again.')
+        except Exception:
+            logger.exception('PayPal import failed')
+            return render_template('paypal_import.html', error='Import failed. Please try again.')
 
     return render_template('paypal_import.html')
 
@@ -3096,18 +3123,25 @@ def paypal_check_player(player_id):
 def assign_paypal_transaction(txn_id):
     player_id = request.form.get('player_id', type=int)
     with get_db() as conn:
+        if not conn.execute('SELECT 1 FROM paypal_transactions WHERE id = ?', (txn_id,)).fetchone():
+            return 'Transaction not found', 404
+        if player_id and not conn.execute('SELECT 1 FROM players WHERE id = ?', (player_id,)).fetchone():
+            return 'Player not found', 404
         conn.execute('UPDATE paypal_transactions SET player_id = ? WHERE id = ?', (player_id, txn_id))
         conn.commit()
-    return redirect(request.referrer or url_for('paypal_check_overview'))
+    return redirect(safe_local_referrer('paypal_check_overview'))
 
 
 @app.route('/players/<int:player_id>/delete', methods=['POST'])
 @login_required
 def delete_player(player_id):
     with get_db() as conn:
-        # Delete attendance records first (foreign key constraint)
+        if not conn.execute('SELECT 1 FROM players WHERE id = ?', (player_id,)).fetchone():
+            return 'Player not found', 404
         conn.execute('DELETE FROM attendance WHERE player_id = ?', (player_id,))
-        # Delete the player
+        conn.execute('DELETE FROM team_assignments WHERE player_id = ?', (player_id,))
+        conn.execute('DELETE FROM player_share_tokens WHERE player_id = ?', (player_id,))
+        conn.execute('DELETE FROM paypal_transactions WHERE player_id = ?', (player_id,))
         conn.execute('DELETE FROM players WHERE id = ?', (player_id,))
         conn.commit()
     
@@ -3126,6 +3160,10 @@ def merge_players():
         return redirect(url_for('admin_players'))
     
     with get_db() as conn:
+        if not conn.execute('SELECT 1 FROM players WHERE id = ?', (source_player_id,)).fetchone():
+            return 'Source player not found', 404
+        if not conn.execute('SELECT 1 FROM players WHERE id = ?', (target_player_id,)).fetchone():
+            return 'Target player not found', 404
         # Update all attendance records from source to target
         # First, delete any duplicate attendance records (same game)
         conn.execute('''
@@ -3148,9 +3186,30 @@ def merge_players():
         # Update team assignments if they exist
         conn.execute('''
             UPDATE team_assignments 
-            SET player_id = ? 
+            SET player_id = ?
             WHERE player_id = ?
-        ''', (target_player_id, source_player_id))
+              AND NOT EXISTS (
+                  SELECT 1 FROM team_assignments existing
+                  WHERE existing.game_id = team_assignments.game_id
+                    AND existing.player_id = ?
+              )
+        ''', (target_player_id, source_player_id, target_player_id))
+
+        conn.execute('DELETE FROM team_assignments WHERE player_id = ?', (source_player_id,))
+        conn.execute('UPDATE paypal_transactions SET player_id = ? WHERE player_id = ?', (target_player_id, source_player_id))
+        source_token = conn.execute(
+            'SELECT token FROM player_share_tokens WHERE player_id = ?', (source_player_id,)
+        ).fetchone()
+        target_token = conn.execute(
+            'SELECT token FROM player_share_tokens WHERE player_id = ?', (target_player_id,)
+        ).fetchone()
+        if source_token and not target_token:
+            conn.execute(
+                'UPDATE player_share_tokens SET player_id = ? WHERE player_id = ?',
+                (target_player_id, source_player_id),
+            )
+        else:
+            conn.execute('DELETE FROM player_share_tokens WHERE player_id = ?', (source_player_id,))
         
         # Delete the source player
         conn.execute('DELETE FROM players WHERE id = ?', (source_player_id,))
@@ -3285,7 +3344,33 @@ def game_detail(game_id):
                          all_players=all_players,
                          weekly_payment_amount=weekly_payment_amount)
 
-@app.route('/games/<int:game_id>/teams')
+@app.route('/games/<int:game_id>/teams', methods=['GET'])
+def view_teams(game_id):
+    with get_db() as conn:
+        game = conn.execute('SELECT * FROM games WHERE id = ?', (game_id,)).fetchone()
+        if not game:
+            return 'Game not found', 404
+        existing_teams = conn.execute('''
+            SELECT p.*, ta.team_number
+            FROM team_assignments ta
+            JOIN players p ON ta.player_id = p.id
+            WHERE ta.game_id = ?
+            ORDER BY ta.team_number, p.name
+        ''', (game_id,)).fetchall()
+
+    team1 = [dict(player) for player in existing_teams if player['team_number'] == 1]
+    team2 = [dict(player) for player in existing_teams if player['team_number'] == 2]
+    return render_template(
+        'teams.html',
+        game=game,
+        team1=team1,
+        team2=team2,
+        teams_generated=bool(existing_teams),
+        is_admin=session.get('logged_in'),
+    )
+
+
+@app.route('/games/<int:game_id>/teams', methods=['POST'])
 @login_required
 def generate_teams(game_id):
     import random
@@ -3335,13 +3420,7 @@ def generate_teams(game_id):
                                  teams_generated=True,
                                  is_admin=session.get('logged_in'))
 
-        if not session.get('logged_in'):
-            return render_template('teams.html',
-                                 game=game,
-                                 teams_generated=False,
-                                 is_admin=False)
-
-        # Admin user - generate teams
+        # The POST route is the only path that generates and persists teams.
         playing = conn.execute('''
             SELECT p.*, a.status
             FROM attendance a
@@ -3403,7 +3482,7 @@ def regenerate_teams(game_id):
         conn.execute('DELETE FROM team_assignments WHERE game_id = ?', (game_id,))
         conn.commit()
 
-    return redirect(url_for('generate_teams', game_id=game_id))
+    return redirect(url_for('view_teams', game_id=game_id))
 
 
 @app.route('/games/<int:game_id>/teams/manual', methods=['GET', 'POST'])
@@ -3453,7 +3532,7 @@ def manual_teams(game_id):
 
             conn.commit()
 
-            return redirect(url_for('generate_teams', game_id=game_id))
+            return redirect(url_for('view_teams', game_id=game_id))
 
         playing = conn.execute('''
             SELECT p.*
@@ -3522,11 +3601,18 @@ def teams_watch_view(game_id):
 @app.route('/games/<int:game_id>/attendance', methods=['POST'])
 @login_required
 def update_attendance(game_id):
-    player_id = request.form['player_id']
-    status = request.form['status']
+    player_id = request.form.get('player_id', type=int)
+    status = request.form.get('status', '').strip()
     paid = 1 if request.form.get('paid') == 'on' else 0
+
+    if not player_id or status not in {'playing', 'maybe', 'not_playing'}:
+        return 'Invalid attendance update.', 400
     
     with get_db() as conn:
+        if not conn.execute('SELECT 1 FROM games WHERE id = ?', (game_id,)).fetchone():
+            return 'Game not found', 404
+        if not conn.execute('SELECT 1 FROM players WHERE id = ?', (player_id,)).fetchone():
+            return 'Player not found', 404
         conn.execute('''
             INSERT INTO attendance (game_id, player_id, status, paid)
             VALUES (?, ?, ?, ?)
@@ -3713,8 +3799,13 @@ def import_csv():
             import csv
             import io
             
-            stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+            payload = file.stream.read(MAX_IMPORT_BYTES + 1)
+            if len(payload) > MAX_IMPORT_BYTES:
+                return render_template('import.html', error='Import file is too large.')
+            stream = io.StringIO(payload.decode('utf-8-sig'), newline=None)
             csv_reader = csv.DictReader(stream)
+            if not csv_reader.fieldnames:
+                return render_template('import.html', error='Import failed. The file must include column headers.')
             
             with get_db() as conn:
                 # Create game
@@ -3723,19 +3814,26 @@ def import_csv():
                 game_id = cursor.lastrowid
                 
                 imported = 0
-                for row in csv_reader:
+                for row_number, row in enumerate(csv_reader, start=2):
+                    if row_number > MAX_IMPORT_ROWS + 1:
+                        raise ValueError('row limit exceeded')
                     player_name = row.get('Player Name') or row.get('Name') or row.get('player')
                     status_raw = row.get('Status') or row.get('status') or row.get('Response')
                     
                     if not player_name:
                         continue
+                    player_name = player_name.strip()
+                    if len(player_name) > MAX_IMPORT_FIELD_LENGTH:
+                        raise ValueError('name too long')
 
                     # Normalize alias: CSVs with "you" should map to the real name
                     if player_name.strip().lower() == 'you':
                         player_name = 'Dave Bird'
                     
                     # Normalize status
-                    status_lower = status_raw.lower().strip()
+                    status_lower = (status_raw or '').lower().strip()
+                    if len(status_lower) > MAX_IMPORT_FIELD_LENGTH:
+                        raise ValueError('status too long')
                     if status_lower in ['yes', '✓', '✅', 'playing', 'in']:
                         status = 'playing'
                     elif status_lower in ['maybe', '?', '❓']:
@@ -3761,8 +3859,12 @@ def import_csv():
             
             return render_template('import.html', success=f'Imported {imported} records for game on {date}')
         
-        except Exception as e:
-            return render_template('import.html', error=f'Import failed: {str(e)}')
+        except (UnicodeDecodeError, csv.Error, ValueError, sqlite3.Error):
+            logger.warning('CSV import rejected: validation or database error')
+            return render_template('import.html', error='Import failed. Check the file format and try again.')
+        except Exception:
+            logger.exception('CSV import failed')
+            return render_template('import.html', error='Import failed. Please try again.')
     
     return render_template('import.html')
 

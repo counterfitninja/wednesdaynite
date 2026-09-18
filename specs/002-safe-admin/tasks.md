@@ -1,5 +1,4 @@
 ---
-
 description: "Actionable tasks for Safe and Verifiable Administration"
 ---
 
@@ -7,78 +6,96 @@ description: "Actionable tasks for Safe and Verifiable Administration"
 
 **Input**: Design documents from `/specs/002-safe-admin/`
 
-**Prerequisites**: `spec.md`, `plan.md`, `quickstart.md`, and `.specify/memory/constitution.md`
+**Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`,
+`contracts/security-behavior.md`, and `quickstart.md`
 
-**Tests**: Included because the feature specification requires isolated regression coverage.
+**Tests**: Included because FR-011 and the feature specification explicitly
+require isolated regression coverage.
 
-**Organization**: Tasks are grouped by the single User Story 1 increment.
+**Organization**: Tasks are grouped by the single P1 user story so the story
+can be implemented and tested as one independently verifiable increment.
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-**Purpose**: Establish isolated testing and dependency foundations.
+**Purpose**: Establish reliable isolated test and documentation seams.
 
-- [ ] T001 Create a temporary SQLite Flask test fixture and test application configuration in `tests/conftest.py`
-- [ ] T002 [P] Add pytest and CSRF dependency requirements in `requirements.txt`
-- [ ] T003 [P] Document the safe-administration test workflow in `specs/002-safe-admin/quickstart.md`
+- [X] T001 Correct the temporary SQLite Flask fixture to set the application database path before initialization and expose a working connection helper in `tests/conftest.py`
+- [X] T002 [P] Add a route/mutation inventory test helper that records database snapshots before and after rejected requests in `tests/conftest.py`
+- [X] T003 [P] Document the isolated test commands, environment assumptions, and expected security outcomes in `specs/002-safe-admin/quickstart.md`
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-**Purpose**: Provide shared security, logging, database, and error-handling infrastructure.
+**Purpose**: Complete shared security and persistence behavior before story work.
 
-**⚠️ CRITICAL**: Complete this phase before User Story 1 implementation tasks.
+**⚠️ CRITICAL**: Complete this phase before Phase 3 implementation tasks.
 
-- [ ] T004 Remove password-length, password-match, and credential debug output from the login route in `app.py`
-- [ ] T005 Add structured logging configuration and sensitive-value filtering for authentication, mutations, imports, uploads, and errors in `app.py`
-- [ ] T006 Add CSRF protection middleware and token generation/validation integration in `app.py`, `templates/base.html`, and `templates/`
-- [ ] T007 Configure secure session cookie settings from environment-aware configuration in `app.py`
-- [ ] T008 Validate the login `next` parameter as a local URL before redirecting in `app.py`
-- [ ] T009 Add safe 403, 404, and 500 error handlers and templates in `app.py` and `templates/`
-- [ ] T010 Enable SQLite foreign keys and document deletion/migration behavior in `app.py` and `README.md`
+- [X] T004 Remove the signed-token fallback from CSRF validation so only an exact current-session token match is accepted, while preserving form and `X-CSRFToken` sources in `app.py`
+- [X] T005 [P] Protect `edit_player` and audit every administrative mutation for `@login_required`, including GET routes that write state, in `app.py`
+- [X] T006 [P] Rotate authentication-related session/CSRF state after successful login and emit redacted authentication outcome events in `app.py`
+- [X] T007 [P] Replace CSRF diagnostics that include unnecessary request metadata or session keys with structured event fields that exclude tokens, cookies, contact data, and raw request values in `app.py`
+- [X] T008 Add safe local redirect validation to every mutation redirect that currently trusts `request.referrer`, including PayPal transaction assignment, in `app.py`
+- [X] T009 [P] Add explicit safe handling for malformed score/status/ID inputs before database writes while preserving documented attendance values `playing`, `maybe`, and `not_playing` in `app.py`
+- [X] T010 [P] Define shared bounded upload and import limits for bytes, rows, field counts, and field lengths in `app.py`, keeping the existing 8 MB global request limit
+- [X] T011 [P] Document SQLite foreign-key enforcement, merge/delete relationship behavior, backup, and restore expectations in `README.md`
 
-**Checkpoint**: Shared security and observability infrastructure is ready.
+**Checkpoint**: Authentication, session-bound CSRF, validation boundaries,
+redirect safety, and persistence policy are ready for story implementation.
 
 ---
 
-## Phase 3: User Story 1 - Safe and Verifiable Administration (Priority: P1) 🎯 MVP
+## Phase 3: User Story 1 - Safe and Verifiable Administration (Priority: P1)
 
-**Goal**: Protect administrative workflows and prove core data rules remain correct without exposing secrets.
+**Goal**: Protect administrative workflows and prove attendance, payment,
+score, team, import, upload, logging, health, and abandoned-game rules remain
+correct without exposing sensitive data.
 
-**Independent Test**: Run all US1 tests against an isolated SQLite database; verify unauthenticated and invalid-CSRF requests change no data, valid requests preserve business rules, logs contain no sensitive values, invalid uploads are rejected, and error/health responses are safe.
+**Independent Test**: Run the complete focused suite against an isolated SQLite
+database; anonymous and invalid-CSRF requests change zero rows, valid requests
+preserve business rules, unsafe uploads are rejected, logs are redacted, and
+health/error responses are safe.
 
 ### Tests for User Story 1
 
-- [ ] T011 [P] [US1] Add authentication, session, protected-route, and local-redirect tests in `tests/test_auth.py`
-- [ ] T012 [P] [US1] Add missing-token, invalid-token, cross-session-token, and valid-token tests in `tests/test_csrf.py`
-- [ ] T013 [P] [US1] Add attendance, score, payment, team, abandoned-game, and statistics regression tests in `tests/test_game_rules.py`
-- [ ] T014 [P] [US1] Add CSV/import name validation and unknown/duplicate input tests in `tests/test_imports.py`
-- [ ] T015 [P] [US1] Add malformed, oversized, unsupported-format, and safe-processing tests in `tests/test_uploads.py`
-- [ ] T016 [P] [US1] Add secret-free log assertions and health-check response tests in `tests/test_observability.py`
-- [ ] T017 [P] [US1] Add safe 403, 404, and 500 response tests in `tests/test_errors.py`
+- [X] T012 [P] [US1] Add authentication and authorization matrix tests for anonymous admin access, `edit_player`, state-changing routes, session cookies, failed login, successful login, logout, and malicious local/external `next` values in `tests/test_auth.py`
+- [X] T013 [P] [US1] Add CSRF tests for missing, invalid, expired, cross-session, valid form, and valid `X-CSRFToken` requests, asserting rejected requests change zero rows in `tests/test_csrf.py`
+- [X] T014 [P] [US1] Add AJAX payment regression coverage that sends the CSRF header and verifies missing/invalid headers are rejected without changing payment state in `tests/test_csrf.py` and `templates/game_detail.html`
+- [X] T015 [P] [US1] Add attendance, payment, score, team generation/manual assignment, abandoned-game, and statistics regression tests with zero-change assertions for invalid inputs in `tests/test_game_rules.py`
+- [ ] T016 [P] [US1] Add import tests for byte/row/field limits, required headers, unknown and duplicate names, malformed values, transactional rollback, and generic user-facing failures in `tests/test_imports.py`
+- [ ] T017 [P] [US1] Add upload tests for invalid magic bytes, oversized files, unsupported formats, malformed SVG, decompression-bomb defenses, and preservation of an existing valid asset after failed replacement in `tests/test_uploads.py`
+- [ ] T018 [P] [US1] Add player merge/delete tests covering attendance, team assignments, payments, share tokens, foreign keys, duplicate relationships, self-merge, and nonexistent IDs in `tests/test_player_data_integrity.py`
+- [X] T019 [P] [US1] Add observability tests asserting passwords, secrets, CSRF/session/share tokens, contact data, filenames, and raw exception details are absent from captured logs; test healthy and unavailable-database health responses in `tests/test_observability.py`
+- [ ] T020 [P] [US1] Add safe 403, 404, 500, CSRF-failure, malformed-mutation, and database-failure response tests with no paths, SQL, stack traces, or secrets in `tests/test_errors.py`
 
 ### Implementation for User Story 1
 
-- [ ] T018 [US1] Add CSRF fields to every state-changing form and ensure AJAX-style mutations send CSRF credentials in `templates/` and static JavaScript files
-- [ ] T019 [US1] Update all administrative mutation routes to reject invalid requests before database writes in `app.py`
-- [ ] T020 [US1] Preserve existing attendance, payment, score, team, import, upload, and abandoned-game rules while routing diagnostics through structured logging in `app.py`
-- [ ] T021 [US1] Add safe user-facing error and validation messages without stack traces or credentials in `templates/login.html`, `templates/`, and `app.py`
-- [ ] T022 [US1] Ensure health endpoints return only safe status/version information and handle database failures predictably in `app.py`
-- [ ] T023 [US1] Add regression coverage for player merge/delete behavior and foreign-key cleanup semantics in `tests/test_player_data_integrity.py`
+- [X] T021 [US1] Add or correct hidden CSRF fields in every state-changing template and add the current token to the payment AJAX request body or `X-CSRFToken` header in `templates/` and `static/`
+- [X] T022 [US1] Convert team generation from a state-changing GET into an authenticated CSRF-protected mutation while retaining a safe read-only team display route in `app.py` and `templates/teams.html`
+- [ ] T023 [US1] Remove or isolate public homepage auto-creation side effects so public reads do not create game records unexpectedly, while preserving the weekly game workflow in `app.py`
+- [X] T024 [US1] Add structured authentication, mutation, import, upload, and error events with redacted metadata and replace remaining security-relevant `print()` diagnostics in `app.py`
+- [X] T025 [US1] Implement strict score, attendance-status, referenced-record, duplicate-player, and malformed-input validation before commits, returning safe actionable messages in `app.py` and affected templates
+- [X] T026 [US1] Make CSV and PayPal imports bounded, schema-validated, transactional, and generic on user-facing failure while logging controlled diagnostic events in `app.py` and import templates
+- [X] T027 [US1] Validate image content and size before processing, reject unsafe SVG content or rasterize it, and atomically replace player/face/sticker/shield assets only after successful validation in `app.py`
+- [X] T028 [US1] Implement explicit merge/delete relationship handling for attendance, team assignments, payment transactions, and share tokens under SQLite foreign keys in `app.py`
+- [X] T029 [US1] Make `/healthz` and `/status` probe database availability and return only the documented stable status/build contract, including a non-sensitive 503 failure response, in `app.py`
+- [X] T030 [US1] Ensure 403, 404, 500, import, upload, and malformed mutation responses use safe user-facing messages and never expose implementation details in `app.py` and `templates/error.html`
 
-**Checkpoint**: User Story 1 is complete when all tests pass and protected workflows preserve existing data rules.
+**Checkpoint**: User Story 1 passes its independent test criteria and all
+covered administrative mutations are authenticated, CSRF-protected, validated,
+observable, and regression-tested.
 
 ---
 
 ## Phase 4: Polish & Cross-Cutting Concerns
 
-**Purpose**: Validate the increment and update operational documentation.
+**Purpose**: Validate the completed increment and update operational records.
 
-- [ ] T024 [P] Run `python -m py_compile app.py` and editor diagnostics for changed Python files in the repository
-- [ ] T025 [P] Run the complete focused US1 test suite from `tests/`
-- [ ] T026 [P] Run the manual verification steps in `specs/002-safe-admin/quickstart.md`
-- [ ] T027 [P] Run `git diff --check` and review compliance against `.specify/memory/constitution.md`
-- [ ] T028 Update `README.md`, `RELEASE_CHECKLIST.md`, and `CHANGELOG.md` with security configuration, testing, and operational behavior
+- [X] T031 [P] Run the focused Safe Administration suite and the full pytest suite from the repository root, recording failures and fixes in `tests/`
+- [X] T032 [P] Run `python -m py_compile app.py` and editor diagnostics for changed Python files
+- [X] T033 [P] Run `git diff --check` and review changed routes, templates, logs, and persistence behavior against `.specify/memory/constitution.md`
+- [ ] T034 [P] Execute every automated and manual scenario in `specs/002-safe-admin/quickstart.md` and confirm the contract in `specs/002-safe-admin/contracts/security-behavior.md`
+- [X] T035 Update `README.md`, `RELEASE_CHECKLIST.md`, and `CHANGELOG.md` with secure configuration, health behavior, upload/import limits, tests, and deletion/restore operations
 
 ---
 
@@ -87,32 +104,35 @@ description: "Actionable tasks for Safe and Verifiable Administration"
 ### Phase Dependencies
 
 - **Phase 1 Setup**: No dependencies.
-- **Phase 2 Foundational**: Depends on Phase 1 and blocks all US1 implementation.
-- **Phase 3 US1**: Depends on Phase 2; tests precede implementation where practical.
-- **Phase 4 Polish**: Depends on completed US1 behavior.
+- **Phase 2 Foundational**: Depends on Phase 1 and blocks User Story 1.
+- **Phase 3 User Story 1**: Depends on Phase 2; tests should be written before or alongside each implementation slice.
+- **Phase 4 Polish**: Depends on the completed User Story 1 implementation and tests.
 
 ### User Story Dependencies
 
-- **US1 (P1)**: This is the only story in this feature and is independently testable after Phase 2.
+- **US1 (P1)**: The only story; independently testable after Phase 2.
 
 ### Parallel Opportunities
 
-- T002 and T003 can run in parallel after T001.
-- T011–T017 can run in parallel once the test fixture exists.
-- T024–T027 can run in parallel after implementation is complete.
+- After T001, T002 and T003 can run in parallel.
+- After T004, T005 through T011 can be split among security, validation, and documentation work when edits do not overlap.
+- After T001–T011, T012–T020 can run in parallel because each owns a focused test module or template seam.
+- After the corresponding tests exist, T021–T030 can be parallelized by CSRF/templates, imports, uploads, data integrity, observability, and error handling, with `app.py` changes coordinated to avoid conflicts.
+- T031–T034 can run in parallel after implementation; T035 follows the verified behavior.
 
 ## Implementation Strategy
 
 ### MVP First
 
-1. Complete Phase 1 Setup.
-2. Complete Phase 2 Foundational.
-3. Complete Phase 3 User Story 1.
-4. Stop and validate with the US1 independent test criteria.
-5. Complete Phase 4 polish and documentation.
+1. Complete Phase 1 and Phase 2.
+2. Deliver T012–T014 and T021–T024 first to close authentication, CSRF, session, and logging risks.
+3. Deliver T015–T020 with T025–T030 to cover data integrity, imports, uploads, health, and errors.
+4. Stop and validate the User Story 1 independent test criteria.
+5. Complete Phase 4 documentation and release checks.
 
-### Notes
+### Format Validation
 
-- Every task follows `- [ ] T### [P?] [US1?] Description with exact file path`.
-- `[P]` is used only for tasks that can be performed in parallel without incomplete-file dependencies.
-- No extension hooks are configured in `.specify/extensions.yml`.
+All 35 tasks use the required `- [ ] T###` checklist format. Setup,
+foundational, and polish tasks have no story label; every User Story 1 task has
+the `[US1]` label. Parallel tasks include `[P]` only where file ownership and
+dependencies permit parallel work. Every task names an exact repository path.

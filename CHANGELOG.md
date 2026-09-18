@@ -6,6 +6,9 @@ This project loosely follows Keep a Changelog format and Semantic Versioning pri
 
 ## [Unreleased]
 ### Changed
+- Hardened administrative authorization and session-bound CSRF validation, including AJAX payment updates and authenticated team generation.
+- Added bounded, transactional import handling, safer health responses, redacted security logging, and atomic validated image replacement.
+- Documented SQLite foreign-key, backup/restore, deletion, upload, and health-check behavior.
 - Removed server-side OCR and its heavyweight EasyOCR/Torch dependencies. Image extraction now stays in the browser, with text paste as the fallback.
 - Added startup cleanup for known EasyOCR and Torch model-cache directories.
 - Attendance percentage now uses `playing / total non-abandoned games` in scope.

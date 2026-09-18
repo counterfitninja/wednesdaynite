@@ -26,3 +26,29 @@ Uploads are validated before processing or storage:
 ## Application Log Event
 
 Structured events may include event name, route, outcome, and non-sensitive identifiers needed for diagnosis. They must not include passwords, secret values, CSRF tokens, session cookies, raw credentials, or unnecessary personal data.
+
+## Import Request
+
+- A CSV/import request is accepted only within configured byte, row, field-count,
+	and field-length limits.
+- Required headers and values are validated before writes.
+- Unknown, duplicate, malformed, or overlong names are rejected or reported by a
+	documented safe policy.
+- Writes are transactional: a failed request leaves the database unchanged.
+
+## Health Response
+
+- Healthy response contains stable `status` and `build_version` fields only.
+- Database failure returns a stable non-sensitive degraded/error status and an
+	appropriate non-2xx response.
+- Host, port, filesystem paths, SQL text, exception details, and configuration
+	secrets are never response fields.
+
+## Relationship Invariants
+
+- Attendance, team assignments, payments, share tokens, and historical game
+	records retain valid player/game references under SQLite foreign keys.
+- Player merge/delete operations explicitly migrate, reconcile, or remove every
+	dependent relationship; they must not silently orphan history.
+- A rejected authorization, CSRF, validation, or upload request changes neither
+	persisted rows nor an existing valid uploaded asset.

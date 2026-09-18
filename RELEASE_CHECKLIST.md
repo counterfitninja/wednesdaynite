@@ -12,6 +12,8 @@ Use this checklist before shipping updates to another machine or to Azure.
 - [ ] Login works with configured `ADMIN_PASSWORD`.
 - [ ] Core pages load: `/`, `/admin/games`, `/admin/players`, `/leaderboard`.
 - [ ] Health endpoint returns OK: `/healthz` or `/status`.
+- [ ] `pytest` passes, including authentication, CSRF, upload/import, and health checks.
+- [ ] Logs contain no passwords, secrets, tokens, cookies, or player contact data.
 
 ## 3) Feature Smoke Tests
 - [ ] Add/edit player works.
@@ -37,6 +39,7 @@ Use this checklist before shipping updates to another machine or to Azure.
 - [ ] `ADMIN_PASSWORD` is set in target environment (required in Azure).
 - [ ] Python dependencies are installed from `requirements.txt`.
 - [ ] If using Gunicorn, confirm it is installed.
+- [ ] Verify state-changing forms and AJAX mutations include session-bound CSRF credentials.
 
 ## 7) Azure Deploy Readiness (if applicable)
 - [ ] `Procfile` entry is valid (`web: gunicorn app:app`).

@@ -16,6 +16,7 @@ def app(tmp_path, monkeypatch):
 
     database = tmp_path / "test.db"
     monkeypatch.setattr(application, "DATABASE", str(database))
+    application.app.config["DATABASE"] = str(database)
     application.app.config.update(TESTING=True, WTF_CSRF_ENABLED=False)
     application.init_db()
     yield application.app
@@ -44,7 +45,8 @@ def login(client):
         data={"password": os.environ["ADMIN_PASSWORD"], "_csrf_token": token},
     )
     assert response.status_code in (301, 302)
-    return token
+    with client.session_transaction() as session:
+        return session["_csrf_token"]
 
 
 def connect(path):

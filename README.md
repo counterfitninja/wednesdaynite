@@ -147,6 +147,21 @@ pytest
 - `/share-import` — browser-side image/text attendance import
 - `/healthz` or `/status` — health/version check
 
+### Security and data-safety behavior
+
+- All state-changing requests require a session-bound CSRF token; AJAX mutations
+	send the token in the request body or `X-CSRFToken` header.
+- Administrative mutations require login. Team pages are readable without login,
+	but team generation and regeneration require an authenticated POST.
+- Uploads and CSV imports are size-bounded and validated before processing. Failed
+	asset replacements preserve the previous valid file, and import failures use
+	generic messages without exposing parser or database details.
+- `/healthz` and `/status` return only `status` and `build_version`; database
+	failure returns a non-sensitive `503` degraded response.
+- SQLite connections enable foreign keys. Before destructive changes, back up
+	`football.db`; player merge/delete operations must preserve or explicitly
+	reconcile attendance, teams, payments, and share-token relationships.
+
 ## Data Backup & Restore
 ### Backup (recommended before major admin changes)
 - Stop the app (or ensure no active writes).

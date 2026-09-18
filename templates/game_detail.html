@@ -374,7 +374,8 @@ if (unpaidOnlyToggle && paymentsList) {
                     },
                     body: new URLSearchParams({
                         player_id: playerIdInput.value,
-                        paid: newPaid
+                        paid: newPaid,
+                        _csrf_token: '{{ csrf_token() }}'
                     })
                 });
 
