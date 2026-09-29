@@ -2755,6 +2755,19 @@ def player_payments(player_id):
                 ''', (paid, attendance_id, player_id))
                 conn.commit()
 
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                weeks, total_weeks, paid_weeks, weekly_payment_amount, total_paid_amount = _get_player_payments_data(conn, player_id)
+                total_owed_amount = (
+                    0.0 if player['payment_exempt'] else round((total_weeks - paid_weeks) * weekly_payment_amount, 2)
+                )
+                return jsonify(
+                    ok=True,
+                    total_weeks=total_weeks,
+                    paid_weeks=paid_weeks,
+                    total_paid_amount=total_paid_amount,
+                    total_owed_amount=total_owed_amount,
+                )
+
             return redirect(url_for('player_payments', player_id=player_id))
 
         weeks, total_weeks, paid_weeks, weekly_payment_amount, total_paid_amount = _get_player_payments_data(conn, player_id)
