@@ -2758,6 +2758,9 @@ def player_payments(player_id):
             return redirect(url_for('player_payments', player_id=player_id))
 
         weeks, total_weeks, paid_weeks, weekly_payment_amount, total_paid_amount = _get_player_payments_data(conn, player_id)
+        total_owed_amount = (
+            0.0 if player['payment_exempt'] else round((total_weeks - paid_weeks) * weekly_payment_amount, 2)
+        )
         share_token = _get_or_create_player_share_token(conn, player_id)
 
     share_url = request.host_url.rstrip('/') + url_for('shared_player_payments', token=share_token)
@@ -2770,6 +2773,7 @@ def player_payments(player_id):
         paid_weeks=paid_weeks,
         weekly_payment_amount=weekly_payment_amount,
         total_paid_amount=total_paid_amount,
+        total_owed_amount=total_owed_amount,
         share_url=share_url,
         public=False
     )
@@ -2801,6 +2805,9 @@ def shared_player_payments(token):
             return "Not found", 404
 
         weeks, total_weeks, paid_weeks, weekly_payment_amount, total_paid_amount = _get_player_payments_data(conn, player['id'])
+        total_owed_amount = (
+            0.0 if player['payment_exempt'] else round((total_weeks - paid_weeks) * weekly_payment_amount, 2)
+        )
 
     return render_template(
         'player_payments.html',
@@ -2810,6 +2817,7 @@ def shared_player_payments(token):
         paid_weeks=paid_weeks,
         weekly_payment_amount=weekly_payment_amount,
         total_paid_amount=total_paid_amount,
+        total_owed_amount=total_owed_amount,
         share_url=None,
         public=True
     )

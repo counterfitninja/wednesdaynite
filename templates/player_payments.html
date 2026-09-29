@@ -36,7 +36,7 @@ function copyShareLink() {
 </script>
 {% endif %}
 
-<div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+<div class="grid" style="grid-template-columns: repeat(4, 1fr);">
     <div class="card stat">
         <div class="stat-value" style="color: #27ae60;">{{ paid_weeks }}</div>
         <div class="stat-label">Weeks Paid</div>
@@ -48,6 +48,10 @@ function copyShareLink() {
     <div class="card stat">
         <div class="stat-value" style="color: #2c3e50; font-size: 2em;">£{{ "%.2f"|format(total_paid_amount) }}</div>
         <div class="stat-label">Total Paid</div>
+    </div>
+    <div class="card stat">
+        <div class="stat-value" style="color: #e74c3c; font-size: 2em;">£{{ "%.2f"|format(total_owed_amount) }}</div>
+        <div class="stat-label">Amount Owed</div>
     </div>
 </div>
 
