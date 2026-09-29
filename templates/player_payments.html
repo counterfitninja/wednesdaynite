@@ -38,7 +38,7 @@ function copyShareLink() {
 
 <div class="grid" style="grid-template-columns: repeat(4, 1fr);">
     <div class="card stat">
-        <div class="stat-value" style="color: #27ae60;">{{ paid_weeks }}</div>
+        <div id="paid-weeks" class="stat-value" style="color: #27ae60;">{{ paid_weeks }}</div>
         <div class="stat-label">Weeks Paid</div>
     </div>
     <div class="card stat">
@@ -46,11 +46,11 @@ function copyShareLink() {
         <div class="stat-label">Weeks Played</div>
     </div>
     <div class="card stat">
-        <div class="stat-value" style="color: #2c3e50; font-size: 2em;">£{{ "%.2f"|format(total_paid_amount) }}</div>
+        <div id="total-paid-amount" class="stat-value" style="color: #2c3e50; font-size: 2em;">£{{ "%.2f"|format(total_paid_amount) }}</div>
         <div class="stat-label">Total Paid</div>
     </div>
     <div class="card stat">
-        <div class="stat-value" style="color: #e74c3c; font-size: 2em;">£{{ "%.2f"|format(total_owed_amount) }}</div>
+        <div id="total-owed-amount" class="stat-value" style="color: #e74c3c; font-size: 2em;">£{{ "%.2f"|format(total_owed_amount) }}</div>
         <div class="stat-label">Amount Owed</div>
     </div>
 </div>
@@ -98,10 +98,10 @@ function copyShareLink() {
                     <span class="badge" style="background-color: #e74c3c;">Unpaid</span>
                     {% endif %}
                     {% else %}
-                    <form method="POST" action="/players/{{ player.id }}/payments" style="display: inline;">
+                    <form class="player-payment-form" method="POST" action="/players/{{ player.id }}/payments" style="display: inline;">
                         <input type="hidden" name="attendance_id" value="{{ week.attendance_id }}">
                         <label style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer;">
-                            <input type="checkbox" name="paid" value="1" {% if week.paid %}checked{% endif %} style="width: auto;" onchange="this.form.submit()">
+                            <input type="checkbox" name="paid" value="1" {% if week.paid %}checked{% endif %} style="width: auto;">
                             Paid
                         </label>
                     </form>
@@ -117,4 +117,60 @@ function copyShareLink() {
     <p>No playing attendance records found for this player yet.</p>
 </div>
 {% endif %}
+
+<script>
+const paymentForms = document.querySelectorAll('.player-payment-form');
+
+const updatePaymentSummary = (data) => {
+    const paidWeeks = document.getElementById('paid-weeks');
+    const totalPaidAmount = document.getElementById('total-paid-amount');
+    const totalOwedAmount = document.getElementById('total-owed-amount');
+
+    if (paidWeeks) {
+        paidWeeks.textContent = data.paid_weeks;
+    }
+    if (totalPaidAmount) {
+        totalPaidAmount.textContent = `£${Number(data.total_paid_amount).toFixed(2)}`;
+    }
+    if (totalOwedAmount) {
+        totalOwedAmount.textContent = `£${Number(data.total_owed_amount).toFixed(2)}`;
+    }
+};
+
+paymentForms.forEach((form) => {
+    const checkbox = form.querySelector('input[name="paid"]');
+    if (!checkbox) {
+        return;
+    }
+
+    checkbox.addEventListener('change', () => form.requestSubmit());
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        checkbox.disabled = true;
+
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                body: new FormData(form),
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+
+            if (!response.ok) {
+                throw new Error('Save failed');
+            }
+
+            const data = await response.json();
+            if (!data.ok) {
+                throw new Error('Save failed');
+            }
+            updatePaymentSummary(data);
+        } catch (error) {
+            checkbox.checked = !checkbox.checked;
+            alert('Could not save payment update. Please try again.');
+        } finally {
+            checkbox.disabled = false;
+        }
+    });
+});
+</script>
 {% endblock %}
