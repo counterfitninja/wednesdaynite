@@ -2034,6 +2034,37 @@ def leaderboard():
             ORDER BY attendance_rate DESC, games_played DESC, p.name
         ''', (str(current_year), total_games_year, total_games_year, str(current_year), total_games_year)).fetchall()
 
+        participation_summary = conn.execute('''
+            WITH qualifying_games AS (
+                SELECT id
+                FROM games
+                WHERE date <= date('now')
+                    AND (is_abandoned IS NULL OR is_abandoned = 0)
+                    AND strftime('%Y', date) = ?
+            ),
+            qualifying_appearances AS (
+                SELECT a.game_id, a.player_id
+                FROM attendance a
+                JOIN qualifying_games g ON g.id = a.game_id
+                WHERE a.status = 'playing'
+            )
+            SELECT
+                (SELECT COUNT(*) FROM qualifying_games) AS game_count,
+                COUNT(*) AS appearance_count,
+                COUNT(DISTINCT player_id) AS active_player_count
+            FROM qualifying_appearances
+        ''', (str(current_year),)).fetchone()
+
+        participation_game_count = participation_summary['game_count']
+        appearance_count = participation_summary['appearance_count']
+        active_player_count = participation_summary['active_player_count']
+        average_players_per_game = round(
+            appearance_count / participation_game_count, 1
+        ) if participation_game_count else 0.0
+        average_games_per_player = round(
+            appearance_count / active_player_count, 1
+        ) if active_player_count else 0.0
+
         scored_games = conn.execute('''
             SELECT id, date, team1_score, team2_score
             FROM games
@@ -2164,6 +2195,8 @@ def leaderboard():
                          attendance_leaderboard=attendance_data,
                          total_games=total_games,
                          total_players=len(leaderboard),
+                         average_players_per_game=average_players_per_game,
+                         average_games_per_player=average_games_per_player,
                          year=current_year,
                          best_active_streak=best_active_streak,
                          best_synergy_pair=best_synergy_pair,

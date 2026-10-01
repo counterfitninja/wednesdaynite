@@ -64,6 +64,21 @@
     <p style="color: #7f8c8d;">Players with most wins this year (abandoned matches excluded). Attendance tab is also year-based.</p>
 </div>
 
+<div class="card">
+    <h3>👥 Participation {{ year }}</h3>
+    <div class="leaderboard-stats-grid">
+        <div class="stat">
+            <div class="stat-value" style="color: #8e44ad;">{{ "%.1f"|format(average_players_per_game) }}</div>
+            <div class="stat-label">Average Players per Game</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" style="color: #16a085;">{{ "%.1f"|format(average_games_per_player) }}</div>
+            <div class="stat-label">Average Games per Active Player</div>
+        </div>
+    </div>
+    <p style="color: #7f8c8d; margin: 14px 0 0;">Based on past, non-abandoned games and players marked as playing.</p>
+</div>
+
 <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
     <button onclick="showLeaderboard('wins')" id="btn-wins" class="btn" style="background: #27ae60;">🏆 Wins</button>
     <button onclick="showLeaderboard('attendance')" id="btn-attendance" class="btn" style="background: #3498db;">📊 Attendance</button>
