@@ -18,7 +18,10 @@
         padding-bottom: 14px;
     }
     .goals-table th:first-child {
-        width: 44%;
+        width: 34%;
+    }
+    .goals-table .goals-games {
+        width: 16%;
     }
     .goals-table th[scope="row"] {
         background: transparent;
@@ -62,10 +65,11 @@
 <div class="card">
     {% if player_rows %}
     <table class="goals-table">
-        <caption>All players, most goals scored first. Players without scored games have zero totals.</caption>
+        <caption>All players, most goals scored first. Games shows the number of matches included in each player's goal totals. Players without scored games have zero totals.</caption>
         <thead>
             <tr>
                 <th scope="col">Player</th>
+                <th scope="col" class="goals-number goals-games">Games</th>
                 <th scope="col" class="goals-number goals-scored">Goals scored</th>
                 <th scope="col" class="goals-number goals-conceded">Goals conceded</th>
             </tr>
@@ -74,6 +78,7 @@
             {% for row in player_rows %}
             <tr>
                 <th scope="row">{{ row.name|name_initial }}</th>
+                <td class="goals-number goals-games">{{ row.games }}</td>
                 <td class="goals-number goals-scored">{{ row.goals_scored }}</td>
                 <td class="goals-number goals-conceded">{{ row.goals_conceded }}</td>
             </tr>
