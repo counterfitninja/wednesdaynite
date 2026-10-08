@@ -1223,6 +1223,15 @@ def init_db():
             )
         ''')
 
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS game_score_share_tokens (
+                game_id INTEGER PRIMARY KEY,
+                token TEXT UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (game_id) REFERENCES games(id)
+            )
+        ''')
+
         # PayPal reconciliation: one row per imported payment (Date + Name export)
         conn.execute('''
             CREATE TABLE IF NOT EXISTS paypal_transactions (
@@ -3389,7 +3398,72 @@ def edit_game(game_id):
         if not game:
             return "Game not found", 404
         
-        return render_template('edit_game.html', game=game)
+        share = conn.execute(
+            'SELECT token FROM game_score_share_tokens WHERE game_id = ?', (game_id,)
+        ).fetchone()
+        share_url = url_for('shared_game_score', token=share['token'], _external=True) if share else None
+        return render_template('edit_game.html', game=game, share_url=share_url)
+
+
+@app.route('/games/<int:game_id>/score-share', methods=['POST'])
+@login_required
+def create_game_score_share(game_id):
+    with get_db() as conn:
+        game = conn.execute('SELECT id, is_abandoned FROM games WHERE id = ?', (game_id,)).fetchone()
+        if not game:
+            return "Game not found", 404
+        if game['is_abandoned']:
+            return "Cannot share the score of an abandoned game", 409
+        token = secrets.token_urlsafe(32)
+        conn.execute(
+            'INSERT INTO game_score_share_tokens (game_id, token) VALUES (?, ?) '
+            'ON CONFLICT(game_id) DO UPDATE SET token = excluded.token',
+            (game_id, token)
+        )
+        conn.commit()
+    return redirect(url_for('edit_game', game_id=game_id))
+
+
+@app.route('/games/score/shared/<token>', methods=['GET', 'POST'])
+def shared_game_score(token):
+    with get_db() as conn:
+        game = conn.execute('''
+            SELECT g.id, g.date, g.location, g.team1_score, g.team2_score, g.is_abandoned
+            FROM game_score_share_tokens s
+            JOIN games g ON g.id = s.game_id
+            WHERE s.token = ?
+        ''', (token,)).fetchone()
+        if not game:
+            return "Not found", 404
+        if game['is_abandoned']:
+            return "This game is abandoned; its score cannot be updated", 409
+
+        error = None
+        scores = (game['team1_score'], game['team2_score'])
+        if request.method == 'POST':
+            raw_scores = (request.form.get('team1_score', ''), request.form.get('team2_score', ''))
+            if not all(re.fullmatch(r'\d{1,3}', value) for value in raw_scores):
+                error = 'Enter both scores as whole numbers from 0 to 999.'
+                scores = raw_scores
+            else:
+                scores = tuple(int(value) for value in raw_scores)
+                conn.execute(
+                    'UPDATE games SET team1_score = ?, team2_score = ? WHERE id = ?',
+                    (*scores, game['id'])
+                )
+                conn.commit()
+                response = redirect(url_for('shared_game_score', token=token, saved=1))
+                response.headers['Cache-Control'] = 'no-store'
+                response.headers['Referrer-Policy'] = 'no-referrer'
+                return response
+
+    response = make_response(render_template(
+        'shared_game_score.html', game=game, scores=scores, error=error,
+        saved=request.args.get('saved') == '1'
+    ), 400 if error else 200)
+    response.headers['Cache-Control'] = 'no-store'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    return response
 
 @app.route('/games/<int:game_id>/abandoned', methods=['POST'])
 @login_required
@@ -3417,6 +3491,7 @@ def delete_game(game_id):
     with get_db() as conn:
         # Delete attendance records first (foreign key constraint)
         conn.execute('DELETE FROM attendance WHERE game_id = ?', (game_id,))
+        conn.execute('DELETE FROM game_score_share_tokens WHERE game_id = ?', (game_id,))
         # Delete the game
         conn.execute('DELETE FROM games WHERE id = ?', (game_id,))
         conn.commit()

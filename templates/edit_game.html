@@ -60,4 +60,36 @@
         </div>
     </form>
 </div>
+<div class="card">
+    <h2>Share final score entry</h2>
+    <p>Anyone with this private link can enter or change this game's final score without logging in. Keep it with people you trust.</p>
+    {% if game.is_abandoned %}
+    <p>Score entry is unavailable for abandoned games.</p>
+    {% elif share_url %}
+    <div class="form-group">
+        <label for="score-share-link">Private link</label>
+        <input id="score-share-link" type="text" readonly value="{{ share_url }}" onclick="this.select()">
+    </div>
+    <button type="button" class="btn" onclick="copyScoreShareLink()">Copy link</button>
+    <form method="POST" action="{{ url_for('create_game_score_share', game_id=game.id) }}" style="display: inline;" onsubmit="return confirm('This will invalidate the old score link. Continue?');">
+        <button type="submit" class="btn btn-danger">Revoke &amp; regenerate link</button>
+    </form>
+    {% else %}
+    <form method="POST" action="{{ url_for('create_game_score_share', game_id=game.id) }}">
+        <button type="submit" class="btn">Create private link</button>
+    </form>
+    {% endif %}
+</div>
+<script>
+function copyScoreShareLink() {
+    const input = document.getElementById('score-share-link');
+    input.select();
+    input.setSelectionRange(0, input.value.length);
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(input.value).catch(() => document.execCommand('copy'));
+    } else {
+        document.execCommand('copy');
+    }
+}
+</script>
 {% endblock %}
