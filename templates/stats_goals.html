@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}All-Time Goals - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<style>
+    .goals-intro p {
+        color: #555;
+        margin-top: 8px;
+        max-width: 720px;
+    }
+    .goals-table {
+        table-layout: fixed;
+    }
+    .goals-table caption {
+        text-align: left;
+        color: #555;
+        padding-bottom: 14px;
+    }
+    .goals-table th:first-child {
+        width: 44%;
+    }
+    .goals-table th[scope="row"] {
+        background: transparent;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+    }
+    .goals-table .goals-number {
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+    }
+    .goals-table td.goals-number {
+        font-size: 1.5em;
+        font-weight: 700;
+    }
+    .goals-table .goals-scored {
+        color: #117864;
+    }
+    .goals-table .goals-conceded {
+        color: #a93226;
+    }
+    .goals-table thead .goals-scored {
+        border-top: 3px solid #117864;
+    }
+    .goals-table thead .goals-conceded {
+        border-top: 3px solid #a93226;
+    }
+</style>
+
+<div class="stats-nav">
+    <a href="{{ url_for('leaderboard') }}" class="btn">Back to Leaderboard</a>
+    <a href="{{ url_for('stats_guide') }}" class="btn">Stats Guide</a>
+    <a href="{{ url_for('stats_goals') }}" class="btn" style="background: #117864;" aria-current="page">All-Time Goals</a>
+</div>
+
+<div class="card goals-intro">
+    <h1>All-Time Goals</h1>
+    <p>Total goals scored and conceded by each player's teams across all years, combining pink and yellow team appearances.</p>
+    <p>These are team totals while the player was on the team, not goals scored individually. Only games with both scores recorded count; abandoned games are excluded.</p>
+</div>
+
+<div class="card">
+    {% if player_rows %}
+    <table class="goals-table">
+        <caption>All players, most goals scored first. Players without scored games have zero totals.</caption>
+        <thead>
+            <tr>
+                <th scope="col">Player</th>
+                <th scope="col" class="goals-number goals-scored">Goals scored</th>
+                <th scope="col" class="goals-number goals-conceded">Goals conceded</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in player_rows %}
+            <tr>
+                <th scope="row">{{ row.name|name_initial }}</th>
+                <td class="goals-number goals-scored">{{ row.goals_scored }}</td>
+                <td class="goals-number goals-conceded">{{ row.goals_conceded }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No players yet. Add players, assign them to teams and record final scores to see their goal totals here.</p>
+    {% endif %}
+</div>
+{% endblock %}

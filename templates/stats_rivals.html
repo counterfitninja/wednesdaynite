@@ -55,6 +55,7 @@
 </style>
 
 <div class="stats-nav">
+    <a href="{{ url_for('stats_goals') }}" class="btn" style="background: #117864;">All-Time Goals</a>
     <a href="/leaderboard" class="btn" style="background: #27ae60;">🏆 Wins</a>
     <a href="/leaderboard?tab=attendance" class="btn" style="background: #3498db;">📊 Attendance</a>
     <a href="/stats/colors" class="btn" style="background: #e91e63;">🎨 Wins By Colour</a>
@@ -172,5 +173,4 @@
 </div>
 {% endif %}
 {% endblock %}
-
 
