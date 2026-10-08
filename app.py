@@ -92,6 +92,35 @@ def team_balancer():
     return render_template('team_balancer.html')
 
 
+@app.route('/stats/goals')
+def stats_goals():
+    with get_db() as conn:
+        player_rows = conn.execute('''
+            WITH goal_totals AS (
+                SELECT ta.player_id,
+                    SUM(CASE WHEN ta.team_number = 1
+                        THEN g.team1_score ELSE g.team2_score END) AS goals_scored,
+                    SUM(CASE WHEN ta.team_number = 1
+                        THEN g.team2_score ELSE g.team1_score END) AS goals_conceded
+                FROM team_assignments ta
+                JOIN games g ON g.id = ta.game_id
+                WHERE g.team1_score IS NOT NULL
+                    AND g.team2_score IS NOT NULL
+                    AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+                    AND ta.team_number IN (1, 2)
+                GROUP BY ta.player_id
+            )
+            SELECT p.id AS player_id, p.name,
+                COALESCE(t.goals_scored, 0) AS goals_scored,
+                COALESCE(t.goals_conceded, 0) AS goals_conceded
+            FROM players p
+            LEFT JOIN goal_totals t ON t.player_id = p.id
+            ORDER BY goals_scored DESC, p.name COLLATE NOCASE, p.id
+        ''').fetchall()
+
+    return render_template('stats_goals.html', player_rows=player_rows)
+
+
 @app.route('/stats/margins')
 def stats_margins():
     min_wins_raw = request.args.get('min_wins', '2').strip()

@@ -20,6 +20,7 @@ This app helps you run weekly Wednesday football games:
 - `/admin/players`: Manage players and view attendance percentages.
 - `/players`: Public player list (name-only, no admin actions).
 - `/leaderboard`: Win/loss/draw leaderboard + attendance leaderboard.
+- `/stats/goals`: All-time goals scored and conceded by each player's teams, combining pink and yellow appearances. These are team totals, not individual goals; abandoned games and games without both scores are excluded.
 - `/import`: Import attendance from CSV.
 - `/admin/settings`: Toggle notifications setting.
 

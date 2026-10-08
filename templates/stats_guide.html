@@ -59,7 +59,7 @@
 
 <div class="card">
     <h1>📖 Stats</h1>
-    <p style="color: #7f8c8d;">A reference for every stat tracked on the leaderboard. All stats are based on the current year and exclude abandoned games.</p>
+    <p style="color: #7f8c8d;">A reference for the leaderboard and stats pages. Leaderboard stats use the current year; All-Time Goals and Score Margins include all years. Abandoned games are excluded.</p>
 </div>
 
 <!-- Stats Pages -->
@@ -74,6 +74,10 @@
             </tr>
         </thead>
         <tbody>
+            <tr>
+                <td><a href="{{ url_for('stats_goals') }}" style="color:#117864; font-weight:600;">All-Time Goals</a></td>
+                <td>Two totals per player: goals scored and goals conceded by their teams across all years, combining pink and yellow appearances. These are team goals, not individual goals. Games without both scores and abandoned games are excluded; players without scored games show zero.</td>
+            </tr>
             <tr>
                 <td><a href="/stats/colors" style="color:#e91e63; font-weight:600;">🎨 Wins By Colour</a></td>
                 <td>Win rates broken down by team colour (pink vs yellow). Shows whether one colour tends to have an advantage and which colour each player wins more with.</td>
@@ -250,4 +254,3 @@
 </div>
 
 {% endblock %}
-

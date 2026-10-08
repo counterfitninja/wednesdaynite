@@ -5,6 +5,7 @@ Simple Flask app for managing weekly casual football games:
 - generate/manual teams
 - record scores
 - view win + attendance leaderboards
+- view all-time team goals scored and conceded per player
 - mark matches as abandoned (excluded from stats)
 
 ## Tech Stack
@@ -130,6 +131,7 @@ gunicorn app:app --bind 0.0.0.0:5000
 - `/admin/players` — manage players + attendance stats
 - `/admin/settings` — notifications toggle
 - `/leaderboard` — wins + attendance leaderboards
+- `/stats/goals` — all-time goals scored and conceded by each player's teams, combining both team colours (not individual goals); excludes abandoned games and games without both scores
 - `/import` — CSV import page
 - `/healthz` or `/status` — health/version check
 
