@@ -70,8 +70,13 @@ class GoalStatsTests(unittest.TestCase):
         self.add_game('2024-01-03', (1, 4), [(alice, 2), (bob, 1)])
         self.add_game('2025-01-01', (3, 3), [(alice, 1)])
         self.add_game('2026-01-07', (0, 2), [(alice, 1), (bob, 2)])
-        _, rows = self.get_stats()
+        response, rows = self.get_stats()
         by_player = {row['player_id']: row for row in rows}
+        self.assertEqual(by_player[alice]['games'], 4)
+        self.assertEqual(by_player[bob]['games'], 3)
+        self.assertEqual(by_player[charlie]['games'], 1)
+        self.assertIn(b'goals-games">Games</th>', response.data)
+        self.assertIn(b'goals-games">4</td>', response.data)
         self.assertEqual((by_player[alice]['goals_scored'], by_player[alice]['goals_conceded']), (12, 8))
         self.assertEqual((by_player[bob]['goals_scored'], by_player[bob]['goals_conceded']), (5, 9))
         self.assertEqual((by_player[charlie]['goals_scored'], by_player[charlie]['goals_conceded']), (5, 2))
@@ -97,6 +102,8 @@ class GoalStatsTests(unittest.TestCase):
         by_player = {row['player_id']: row for row in rows}
         self.assertEqual((by_player[alice]['goals_scored'], by_player[alice]['goals_conceded']), (1, 2))
         self.assertEqual((by_player[absent]['goals_scored'], by_player[absent]['goals_conceded']), (0, 0))
+        self.assertEqual(by_player[alice]['games'], 2)
+        self.assertEqual(by_player[absent]['games'], 0)
         self.assertIn(b'Goals scored', response.data)
         self.assertIn(b'Goals conceded', response.data)
         self.assertIn(b'not goals scored individually', response.data)
@@ -108,7 +115,7 @@ class GoalStatsTests(unittest.TestCase):
         alice = self.add_player('Alice')
         response, rows = self.get_stats()
         self.assertEqual(rows, [{
-            'player_id': alice, 'name': 'Alice', 'goals_scored': 0, 'goals_conceded': 0
+            'player_id': alice, 'name': 'Alice', 'games': 0, 'goals_scored': 0, 'goals_conceded': 0
         }])
         self.assertNotIn(b'No players yet.', response.data)
 

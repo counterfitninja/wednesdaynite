@@ -98,6 +98,7 @@ def stats_goals():
         player_rows = conn.execute('''
             WITH goal_totals AS (
                 SELECT ta.player_id,
+                    COUNT(*) AS games,
                     SUM(CASE WHEN ta.team_number = 1
                         THEN g.team1_score ELSE g.team2_score END) AS goals_scored,
                     SUM(CASE WHEN ta.team_number = 1
@@ -111,6 +112,7 @@ def stats_goals():
                 GROUP BY ta.player_id
             )
             SELECT p.id AS player_id, p.name,
+                COALESCE(t.games, 0) AS games,
                 COALESCE(t.goals_scored, 0) AS goals_scored,
                 COALESCE(t.goals_conceded, 0) AS goals_conceded
             FROM players p
