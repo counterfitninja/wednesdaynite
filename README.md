@@ -110,6 +110,7 @@ gunicorn app:app --bind 0.0.0.0:5000
 2. Record attendance (bulk or individual).
 3. Generate teams or set manual teams.
 4. After match, edit score.
+   - To let someone enter the final score without an admin login, open the game's **Edit** page and create a private score link. Copy and share it only with someone you trust; anyone with the link can change that game's score. Use **Revoke & regenerate link** to invalidate the old link. Abandoned games cannot be updated through it.
 5. If cancelled/stopped, mark game abandoned.
 
 ### Player management flow

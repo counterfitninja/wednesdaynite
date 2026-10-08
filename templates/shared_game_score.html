@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Enter Final Score - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>Final score for {{ game.date|ukdate }}</h1>
+    <p>{{ game.location or 'Wednesday Night FC' }}</p>
+    <p>This link only allows changes to this game's score. No login is needed.</p>
+    {% if saved %}
+    <p role="status" style="color: #27ae60;">Final score saved.</p>
+    {% endif %}
+    {% if error %}
+    <p role="alert" style="color: #c0392b;">{{ error }}</p>
+    {% endif %}
+    <form method="POST">
+        <div class="form-group">
+            <label for="team1_score">Team 1 (Pink) Score</label>
+            <input type="number" id="team1_score" name="team1_score" min="0" max="999" required value="{{ scores[0] if scores[0] is not none else '' }}">
+        </div>
+        <div class="form-group">
+            <label for="team2_score">Team 2 (Yellow) Score</label>
+            <input type="number" id="team2_score" name="team2_score" min="0" max="999" required value="{{ scores[1] if scores[1] is not none else '' }}">
+        </div>
+        <button type="submit" class="btn btn-success">Save final score</button>
+    </form>
+</div>
+{% endblock %}
