@@ -42,7 +42,15 @@
         <tbody>
             {% for game in games %}
             <tr>
-                <td><strong>{{ game.date|ukdate }}</strong></td>
+                <td>
+                    <strong>{{ game.date|ukdate }}</strong>
+                    {% if game.weather %}
+                        <span title="At 9pm: {{ game.weather.description }}, {{ game.weather.temperature|round|int }}°C"
+                              aria-label="Weather at 9pm: {{ game.weather.description }}, {{ game.weather.temperature|round|int }}°C">
+                            {{ game.weather.symbol }} {{ game.weather.temperature|round|int }}°C
+                        </span>
+                    {% endif %}
+                </td>
                 <td class="col-location">{{ game.location or 'N/A' }}</td>
                 <td>
                     {% if game.is_abandoned %}
