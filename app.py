@@ -12,6 +12,10 @@ from io import BytesIO, StringIO
 import csv
 import io
 import json
+import logging
+import urllib.error
+import urllib.parse
+import urllib.request
 from PIL import Image, ImageDraw, ImageFont, UnidentifiedImageError
 
 try:
@@ -28,6 +32,7 @@ except Exception:
     np = None
 
 app = Flask(__name__)
+logger = logging.getLogger(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'change-this-to-something-secure-in-production')
 # Keep admin sessions alive longer by default; can be overridden via env var.
 session_lifetime_days = int(os.environ.get('SESSION_LIFETIME_DAYS', '180'))
@@ -1489,6 +1494,98 @@ def logout():
     session.pop('logged_in', None)
     return redirect(url_for('index'))
 
+
+WEATHER_CODE_SYMBOLS = {
+    0: ('🌙', 'Clear'),
+    1: ('🌤️', 'Mostly clear'),
+    2: ('☁️', 'Partly cloudy'),
+    3: ('☁️', 'Overcast'),
+    45: ('🌫️', 'Fog'),
+    48: ('🌫️', 'Rime fog'),
+    51: ('🌦️', 'Light drizzle'),
+    53: ('🌦️', 'Drizzle'),
+    55: ('🌧️', 'Heavy drizzle'),
+    56: ('🌧️', 'Freezing drizzle'),
+    57: ('🌧️', 'Heavy freezing drizzle'),
+    61: ('🌧️', 'Light rain'),
+    63: ('🌧️', 'Rain'),
+    65: ('🌧️', 'Heavy rain'),
+    66: ('🌧️', 'Freezing rain'),
+    67: ('🌧️', 'Heavy freezing rain'),
+    71: ('🌨️', 'Light snow'),
+    73: ('🌨️', 'Snow'),
+    75: ('❄️', 'Heavy snow'),
+    77: ('❄️', 'Snow grains'),
+    80: ('🌦️', 'Light showers'),
+    81: ('🌧️', 'Showers'),
+    82: ('🌧️', 'Heavy showers'),
+    85: ('🌨️', 'Snow showers'),
+    86: ('🌨️', 'Heavy snow showers'),
+    95: ('⛈️', 'Thunderstorm'),
+    96: ('⛈️', 'Thunderstorm with hail'),
+    99: ('⛈️', 'Thunderstorm with heavy hail'),
+}
+
+
+def get_historical_weather_symbols(game_dates):
+    """Fetch only the 9pm historical weather symbol for past game dates."""
+    today = datetime.now().date()
+    dates = set()
+    for game_date in game_dates:
+        try:
+            parsed_date = datetime.strptime(game_date, '%Y-%m-%d').date()
+        except (TypeError, ValueError):
+            continue
+        if parsed_date < today:
+            dates.add(parsed_date)
+
+    if not dates:
+        return {}
+
+    ordered_dates = sorted(dates)
+    date_groups = []
+    for game_date in ordered_dates:
+        if not date_groups or (game_date - date_groups[-1][0]).days > 90:
+            date_groups.append([game_date])
+        else:
+            date_groups[-1].append(game_date)
+
+    symbols = {}
+    for date_group in date_groups:
+        params = urllib.parse.urlencode({
+            'latitude': os.environ.get('WEATHER_LATITUDE', '51.22834'),
+            'longitude': os.environ.get('WEATHER_LONGITUDE', '-2.32211'),
+            'start_date': date_group[0].isoformat(),
+            'end_date': date_group[-1].isoformat(),
+            'hourly': 'weather_code,temperature_2m',
+            'temperature_unit': 'celsius',
+            'timezone': 'Europe/London',
+        })
+        url = f'https://archive-api.open-meteo.com/v1/archive?{params}'
+        try:
+            with urllib.request.urlopen(url, timeout=4) as response:
+                weather_data = json.loads(response.read().decode('utf-8'))
+            times = weather_data['hourly']['time']
+            weather_codes = weather_data['hourly']['weather_code']
+            temperatures = weather_data['hourly']['temperature_2m']
+            group_dates = {date.isoformat() for date in date_group}
+            for timestamp, weather_code, temperature in zip(times, weather_codes, temperatures):
+                if timestamp.endswith('T21:00') and weather_code is not None and temperature is not None:
+                    game_date = timestamp[:10]
+                    code = int(weather_code)
+                    if game_date in group_dates:
+                        symbol, description = WEATHER_CODE_SYMBOLS.get(code, ('☁️', 'Weather'))
+                        symbols[game_date] = {
+                            'symbol': symbol,
+                            'description': description,
+                            'temperature': temperature,
+                        }
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            logger.warning('Could not load historical weather for %s: %s', date_group[0], exc)
+
+    return symbols
+
+
 @app.route('/')
 def index():
     from datetime import datetime, timedelta
@@ -1553,6 +1650,9 @@ def index():
     
     has_prev = page > 1
     has_next = (offset + len(game_data)) < total_games
+    weather_symbols = get_historical_weather_symbols(game['date'] for game in game_data)
+    for game in game_data:
+        game['weather'] = weather_symbols.get(game['date'])
 
     return render_template(
         'index.html',
