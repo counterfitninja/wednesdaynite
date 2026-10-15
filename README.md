@@ -136,6 +136,8 @@ gunicorn app:app --bind 0.0.0.0:5000
 - `/import` — CSV import page
 - `/healthz` or `/status` — health/version check
 
+The footer and health endpoints show release version `2026.10.15.1` followed by the app's startup timestamp. The service worker refreshes old app caches and loads pages from the network so a cached homepage cannot hide a deployed update.
+
 ## Data Backup & Restore
 ### Backup (recommended before major admin changes)
 - Stop the app (or ensure no active writes).

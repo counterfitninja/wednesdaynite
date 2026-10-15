@@ -34,8 +34,8 @@ session_lifetime_days = int(os.environ.get('SESSION_LIFETIME_DAYS', '180'))
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=session_lifetime_days)
 app.config['SESSION_REFRESH_EACH_REQUEST'] = True
 
-# Build version - timestamp when app starts
-BUILD_VERSION = datetime.now().strftime('%Y.%m.%d.%H%M')
+APP_VERSION = '2026.10.15.1'
+BUILD_VERSION = f"{APP_VERSION} (started {datetime.now().strftime('%Y.%m.%d.%H%M')})"
 
 # Network config
 HOST = os.environ.get('HOST', '0.0.0.0')
