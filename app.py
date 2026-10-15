@@ -123,6 +123,95 @@ def stats_goals():
     return render_template('stats_goals.html', player_rows=player_rows)
 
 
+@app.route('/stats/matchups')
+def stats_matchups():
+    with get_db() as conn:
+        players = conn.execute(
+            'SELECT id, name FROM players ORDER BY name COLLATE NOCASE, id'
+        ).fetchall()
+        player_lookup = {row['id']: row for row in players}
+        selected_player = None
+        selected_ids = set()
+        error = None
+        player_id_raw = request.args.get('player_id', '')
+        comparison_ids_raw = request.args.getlist('comparison_ids')
+        try:
+            player_id = int(player_id_raw) if player_id_raw else None
+            selected_ids = {int(value) for value in comparison_ids_raw}
+        except ValueError:
+            player_id = None
+            error = 'Choose valid players using the selectors below.'
+
+        if not error:
+            if player_id is not None and player_id not in player_lookup:
+                error = 'The main player no longer exists. Choose another player.'
+            elif not selected_ids.issubset(player_lookup):
+                error = 'A comparison player no longer exists. Choose the combination again.'
+            elif selected_ids and player_id is None:
+                error = 'Choose a main player before selecting a combination.'
+            elif player_id in selected_ids:
+                error = 'The combination must contain other players, not the main player.'
+            else:
+                selected_player = player_lookup.get(player_id)
+
+        assignments = []
+        if selected_player and not error:
+            assignments = conn.execute('''
+                SELECT main.game_id, main.team_number AS main_team,
+                    other.player_id, other.team_number
+                FROM team_assignments main
+                JOIN games g ON g.id = main.game_id
+                JOIN team_assignments other ON other.game_id = main.game_id
+                JOIN players p ON p.id = other.player_id
+                WHERE main.player_id = ?
+                    AND main.team_number IN (1, 2)
+                    AND other.team_number IN (1, 2)
+                    AND g.team1_score IS NOT NULL
+                    AND g.team2_score IS NOT NULL
+                    AND (g.is_abandoned IS NULL OR g.is_abandoned = 0)
+            ''', (player_id,)).fetchall()
+
+    games = {}
+    for row in assignments:
+        game = games.setdefault(row['game_id'], {'with': set(), 'against': set()})
+        if row['player_id'] != player_id:
+            side = 'with' if row['team_number'] == row['main_team'] else 'against'
+            game[side].add(row['player_id'])
+
+    player_rows = []
+    if selected_player:
+        for player in players:
+            if player['id'] == player_id:
+                continue
+            with_count = sum(player['id'] in game['with'] for game in games.values())
+            against_count = sum(player['id'] in game['against'] for game in games.values())
+            player_rows.append({
+                'player_id': player['id'], 'name': player['name'],
+                'with_count': with_count, 'against_count': against_count,
+                'shared_count': with_count + against_count
+            })
+        player_rows.sort(key=lambda row: (-row['shared_count'], row['name'].casefold(), row['player_id']))
+
+    combination = None
+    if selected_player and selected_ids:
+        with_count = sum(selected_ids.issubset(game['with']) for game in games.values())
+        against_count = sum(selected_ids.issubset(game['against']) for game in games.values())
+        shared_count = sum(
+            selected_ids.issubset(game['with'] | game['against']) for game in games.values()
+        )
+        combination = {
+            'with_count': with_count, 'against_count': against_count,
+            'shared_count': shared_count, 'split_count': shared_count - with_count - against_count
+        }
+
+    return render_template(
+        'stats_matchups.html', players=players, selected_player=selected_player,
+        selected_ids=selected_ids, error=error, total_games=len(games),
+        player_rows=player_rows, combination=combination,
+        combination_players=[player for player in players if player['id'] in selected_ids]
+    ), 400 if error else 200
+
+
 @app.route('/stats/margins')
 def stats_margins():
     min_wins_raw = request.args.get('min_wins', '2').strip()

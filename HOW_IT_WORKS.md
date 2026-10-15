@@ -21,6 +21,7 @@ This app helps you run weekly Wednesday football games:
 - `/players`: Public player list (name-only, no admin actions).
 - `/leaderboard`: Win/loss/draw leaderboard + attendance leaderboard.
 - `/stats/goals`: All-time goals scored and conceded by each player's teams, combining pink and yellow appearances. These are team totals, not individual goals; abandoned games and games without both scores are excluded.
+- `/stats/matchups`: All-time teammate/opponent frequencies for a selected player, plus optional multi-player combinations. All selected players must be on the main player's team for "with", or the opposing team for "against"; extra players are allowed. Split-team appearances are reported separately. Percentages use the main player's completed games; abandoned games, missing scores and invalid team assignments are excluded.
 - `/import`: Import attendance from CSV.
 - `/admin/settings`: Toggle notifications setting.
 

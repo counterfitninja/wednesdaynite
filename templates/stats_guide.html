@@ -59,7 +59,7 @@
 
 <div class="card">
     <h1>📖 Stats</h1>
-    <p style="color: #7f8c8d;">A reference for the leaderboard and stats pages. Leaderboard stats use the current year; All-Time Goals and Score Margins include all years. Abandoned games are excluded.</p>
+    <p style="color: #7f8c8d;">A reference for the leaderboard and stats pages. Leaderboard stats use the current year; All-Time Goals, Player Matchups and Score Margins include all years. Abandoned games are excluded.</p>
 </div>
 
 <!-- Stats Pages -->
@@ -74,6 +74,10 @@
             </tr>
         </thead>
         <tbody>
+            <tr>
+                <td><a href="{{ url_for('stats_matchups') }}" style="color:#2c3e50; font-weight:600;">Player Matchups</a></td>
+                <td>Pick a main player to see how often they play with or against each other player across all years. Select multiple other players to count games with all of them on the same team, or against all of them on the opposing team. Extra players are allowed; split combinations are shown separately. Percentages use the main player's completed games. Abandoned games, missing scores and invalid team assignments are excluded.</td>
+            </tr>
             <tr>
                 <td><a href="{{ url_for('stats_goals') }}" style="color:#117864; font-weight:600;">All-Time Goals</a></td>
                 <td>Two totals per player: goals scored and goals conceded by their teams across all years, combining pink and yellow appearances. These are team goals, not individual goals. Games without both scores and abandoned games are excluded; players without scored games show zero.</td>
