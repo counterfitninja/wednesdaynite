@@ -132,6 +132,7 @@ gunicorn app:app --bind 0.0.0.0:5000
 - `/admin/settings` — notifications toggle
 - `/leaderboard` — wins + attendance leaderboards
 - `/stats/goals` — all-time goals scored and conceded by each player's teams, combining both team colours (not individual goals), plus the number of games included; excludes abandoned games and games without both scores
+- `/stats/matchups` — pick a main player to see all-time with/against frequencies for each other player; optionally select a combination that must all be teammates or all opponents in the same match (extra players are allowed). Shows split combinations separately and percentages of the main player's completed games; excludes abandoned games, missing scores and invalid team assignments
 - `/import` — CSV import page
 - `/healthz` or `/status` — health/version check
 

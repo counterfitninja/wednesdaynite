@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}Player Matchups - Wednesday Night FC{% endblock %}
+
+{% block content %}
+<style>
+    .matchups p { color: #555; margin: 8px 0 16px; }
+    .matchups select { max-width: 440px; }
+    .matchups fieldset { border: 1px solid #ddd; border-radius: 4px; padding: 12px; margin-bottom: 16px; }
+    .matchups legend { padding: 0 6px; font-weight: 600; }
+    .matchup-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px; max-height: 280px; overflow-y: auto; }
+    .matchup-choice { display: flex; align-items: center; gap: 8px; padding: 8px; cursor: pointer; overflow-wrap: anywhere; }
+    .matchup-choice input { width: 18px; height: 18px; flex-shrink: 0; }
+    .matchup-choice:has(input:checked) { background: #f0f4f8; }
+    .matchup-choice:has(input:disabled) { color: #777; cursor: default; }
+    .matchup-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+    .matchup-side { padding: 16px; border-top: 4px solid; background: #f5f5f5; }
+    .matchup-with { color: #117864; border-color: #117864; }
+    .matchup-against { color: #a93226; border-color: #a93226; }
+    .matchup-count { display: block; font-family: Consolas, monospace; font-size: 2em; font-weight: 700; }
+    .matchup-table { table-layout: fixed; }
+    .matchup-table caption { text-align: left; color: #555; padding-bottom: 12px; }
+    .matchup-table th:first-child { width: 40%; overflow-wrap: anywhere; }
+    .matchup-table th[scope="row"] { background: transparent; }
+    .matchup-table .matchup-number { text-align: center; font-variant-numeric: tabular-nums; }
+    .matchup-table td.matchup-number { font-weight: 700; }
+    .matchups :focus-visible { outline: 3px solid #2c3e50; outline-offset: 3px; }
+    .matchups .matchup-error { color: #a93226; background: #fff1ef; padding: 12px; border-radius: 4px; }
+    @media (max-width: 600px) {
+        .matchup-table th, .matchup-table td { padding: 8px 4px; font-size: 0.9em; }
+        .matchup-sides { gap: 8px; }
+    }
+</style>
+
+<div class="stats-nav">
+    <a href="{{ url_for('leaderboard') }}" class="btn">Back to Leaderboard</a>
+    <a href="{{ url_for('stats_guide') }}" class="btn">Stats Guide</a>
+</div>
+
+<div class="card matchups">
+    <h1>Player Matchups</h1>
+    <p>Who shares your team, and who lines up against you? Pick a player to compare every teammate and opponent across all years.</p>
+    <p>Only non-abandoned matches with both scores recorded and valid team assignments count. Percentages use the main player's total included games.</p>
+    {% if error %}<p class="matchup-error" role="alert">{{ error }}</p>{% endif %}
+    {% if players %}
+    <form method="get" action="{{ url_for('stats_matchups') }}">
+        <div class="form-group">
+            <label for="matchup-player">Main player</label>
+            <select id="matchup-player" name="player_id" required>
+                <option value="">Choose a player</option>
+                {% for player in players %}
+                <option value="{{ player.id }}" {% if selected_player and player.id == selected_player.id %}selected{% endif %}>{{ player.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <fieldset aria-describedby="combination-help">
+            <legend>Other players in the combination (optional)</legend>
+            <p id="combination-help">Select one or more players. A match counts as playing with the combination only if everyone selected is on the main player's team; against means everyone selected is on the opposing team. Other teammates and opponents can also be present.</p>
+            <div class="matchup-choices">
+                {% for player in players %}
+                <label class="matchup-choice">
+                    <input type="checkbox" name="comparison_ids" value="{{ player.id }}" {% if player.id in selected_ids %}checked{% endif %} {% if selected_player and player.id == selected_player.id %}disabled{% endif %}>
+                    {{ player.name }}
+                </label>
+                {% endfor %}
+            </div>
+        </fieldset>
+        <button type="submit" class="btn">Show matchups</button>
+        <a href="{{ url_for('stats_matchups') }}" class="btn">Clear selection</a>
+    </form>
+    {% else %}
+    <p>No players yet. Add players and record games with team assignments and final scores to see matchups here.</p>
+    {% endif %}
+</div>
+
+{% if selected_player %}
+<div class="card matchups">
+    <h2>{{ selected_player.name }}: {{ total_games }} completed {{ 'game' if total_games == 1 else 'games' }}</h2>
+    {% if total_games == 0 %}<p>No completed games with a valid team assignment for this player yet.</p>{% endif %}
+    {% if combination %}
+    <h3>Selected combination</h3>
+    <p>{% for player in combination_players %}{{ player.name }}{% if not loop.last %} + {% endif %}{% endfor %}</p>
+    <div class="matchup-sides">
+        <div class="matchup-side matchup-with">
+            <h3>Played with all</h3>
+            <span class="matchup-count">{{ combination.with_count }}</span>
+            {{ "%.1f"|format(combination.with_count * 100 / total_games if total_games else 0) }}% of games
+        </div>
+        <div class="matchup-side matchup-against">
+            <h3>Played against all</h3>
+            <span class="matchup-count">{{ combination.against_count }}</span>
+            {{ "%.1f"|format(combination.against_count * 100 / total_games if total_games else 0) }}% of games
+        </div>
+    </div>
+    <p>All selected players appeared in {{ combination.shared_count }} games with {{ selected_player.name }}. In {{ combination.split_count }} of those games, they were split between teammates and opponents.</p>
+    {% if combination.shared_count == 0 %}<p>This combination has not appeared together in an included game.</p>{% endif %}
+    {% else %}
+    <p>Select other players above to see how often a whole combination plays with or against {{ selected_player.name }}.</p>
+    {% endif %}
+</div>
+
+<div class="card matchups">
+    <h2>Individual teammates and opponents</h2>
+    {% if player_rows %}
+    <table class="matchup-table">
+        <caption>All other players, most shared games first. Each cell shows games and the percentage of {{ selected_player.name }}'s {{ total_games }} included games.</caption>
+        <thead>
+            <tr>
+                <th scope="col">Player</th>
+                <th scope="col" class="matchup-number matchup-with">With</th>
+                <th scope="col" class="matchup-number matchup-against">Against</th>
+                <th scope="col" class="matchup-number">Shared</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in player_rows %}
+            <tr>
+                <th scope="row">{{ row.name }}</th>
+                <td class="matchup-number matchup-with">{{ row.with_count }}<br><small>{{ "%.1f"|format(row.with_count * 100 / total_games if total_games else 0) }}%</small></td>
+                <td class="matchup-number matchup-against">{{ row.against_count }}<br><small>{{ "%.1f"|format(row.against_count * 100 / total_games if total_games else 0) }}%</small></td>
+                <td class="matchup-number">{{ row.shared_count }}<br><small>{{ "%.1f"|format(row.shared_count * 100 / total_games if total_games else 0) }}%</small></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>Add another player to compare teammates and opponents.</p>
+    {% endif %}
+</div>
+{% elif players and not error %}
+<div class="card"><p>Choose a main player and select Show matchups to see their playing history.</p></div>
+{% endif %}
+
+<script>
+    const matchupPlayer = document.getElementById('matchup-player');
+    if (matchupPlayer) {
+        function updateMatchupChoices() {
+            document.querySelectorAll('input[name="comparison_ids"]').forEach(input => {
+                input.disabled = input.value === matchupPlayer.value;
+                if (input.disabled) input.checked = false;
+            });
+        }
+        matchupPlayer.addEventListener('change', updateMatchupChoices);
+        updateMatchupChoices();
+    }
+</script>
+{% endblock %}
