@@ -143,9 +143,13 @@ paymentForms.forEach((form) => {
         return;
     }
 
-    checkbox.addEventListener('change', () => form.requestSubmit());
-    form.addEventListener('submit', async (event) => {
-        event.preventDefault();
+    let saving = false;
+    const savePayment = async () => {
+        if (saving) {
+            return;
+        }
+
+        saving = true;
         checkbox.disabled = true;
 
         try {
@@ -168,8 +172,15 @@ paymentForms.forEach((form) => {
             checkbox.checked = !checkbox.checked;
             alert('Could not save payment update. Please try again.');
         } finally {
+            saving = false;
             checkbox.disabled = false;
         }
+    };
+
+    checkbox.addEventListener('change', savePayment);
+    form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        savePayment();
     });
 });
 </script>
