@@ -2889,11 +2889,16 @@ def player_payments(player_id):
             paid = 1 if request.form.get('paid') == '1' else 0
 
             if attendance_id:
-                conn.execute('''
+                update = conn.execute('''
                     UPDATE attendance
                     SET paid = ?
                     WHERE id = ? AND player_id = ? AND status = 'playing'
                 ''', (paid, attendance_id, player_id))
+                if update.rowcount != 1:
+                    conn.rollback()
+                    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                        return jsonify(ok=False, error='Attendance record was not found.'), 404
+                    return redirect(url_for('player_payments', player_id=player_id))
                 conn.commit()
 
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
