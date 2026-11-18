@@ -104,6 +104,7 @@ function copyShareLink() {
                             <input type="checkbox" name="paid" value="1" {% if week.paid %}checked{% endif %} style="width: auto;">
                             Paid
                         </label>
+                        <span class="player-payment-status" style="font-size: 0.8em; color: #7f8c8d; min-width: 60px;" aria-live="polite"></span>
                     </form>
                     {% endif %}
                 </td>
@@ -139,24 +140,51 @@ const updatePaymentSummary = (data) => {
 
 paymentForms.forEach((form) => {
     const checkbox = form.querySelector('input[name="paid"]');
-    if (!checkbox) {
+    const attendanceIdInput = form.querySelector('input[name="attendance_id"]');
+    const statusEl = form.querySelector('.player-payment-status');
+    if (!checkbox || !attendanceIdInput) {
         return;
     }
 
     let saving = false;
+    const setStatus = (text, color, clearAfterMs = 0) => {
+        if (!statusEl) {
+            return;
+        }
+
+        statusEl.textContent = text;
+        statusEl.style.color = color;
+        if (clearAfterMs > 0) {
+            window.setTimeout(() => {
+                if (statusEl.textContent === text) {
+                    statusEl.textContent = '';
+                }
+            }, clearAfterMs);
+        }
+    };
+
     const savePayment = async () => {
         if (saving) {
             return;
         }
 
+        const previousPaid = checkbox.checked ? '0' : '1';
+        const newPaid = checkbox.checked ? '1' : '0';
         saving = true;
         checkbox.disabled = true;
+        setStatus('Saving…', '#3498db');
 
         try {
             const response = await fetch(form.action, {
                 method: 'POST',
-                body: new FormData(form),
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: new URLSearchParams({
+                    attendance_id: attendanceIdInput.value,
+                    paid: newPaid
+                })
             });
 
             if (!response.ok) {
@@ -165,11 +193,13 @@ paymentForms.forEach((form) => {
 
             const data = await response.json();
             if (!data.ok) {
-                throw new Error('Save failed');
+                throw new Error(data.error || 'Save failed');
             }
             updatePaymentSummary(data);
+            setStatus('Saved', '#27ae60', 1200);
         } catch (error) {
-            checkbox.checked = !checkbox.checked;
+            checkbox.checked = previousPaid === '1';
+            setStatus('Not saved', '#e74c3c', 2500);
             alert('Could not save payment update. Please try again.');
         } finally {
             saving = false;
