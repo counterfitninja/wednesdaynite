@@ -3,6 +3,32 @@
 {% block title %}Player Payments - Wednesday Night FC{% endblock %}
 
 {% block content %}
+<style>
+    #payment-save-notice {
+        position: fixed;
+        top: 18px;
+        right: 18px;
+        z-index: 1000;
+        display: none;
+        max-width: min(320px, calc(100vw - 36px));
+        padding: 10px 14px;
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(31, 45, 58, 0.18);
+        font-size: 0.9em;
+        pointer-events: none;
+    }
+
+    @media (max-width: 600px) {
+        #payment-save-notice {
+            top: 12px;
+            right: 12px;
+            left: 12px;
+            max-width: none;
+            text-align: center;
+        }
+    }
+</style>
+
 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
     <h1>Payments - {{ player.name }}</h1>
     {% if not public %}
@@ -35,6 +61,8 @@ function copyShareLink() {
 }
 </script>
 {% endif %}
+
+<div id="payment-save-notice" role="status" aria-live="polite"></div>
 
 <div class="grid" style="grid-template-columns: repeat(4, 1fr);">
     <div class="card stat">
@@ -104,7 +132,6 @@ function copyShareLink() {
                             <input type="checkbox" name="paid" value="1" {% if week.paid %}checked{% endif %} style="width: auto;">
                             Paid
                         </label>
-                        <span class="player-payment-status" style="font-size: 0.8em; color: #7f8c8d; min-width: 60px;" aria-live="polite"></span>
                     </form>
                     {% endif %}
                 </td>
@@ -121,6 +148,41 @@ function copyShareLink() {
 
 <script>
 const paymentForms = document.querySelectorAll('.player-payment-form');
+const paymentSaveNotice = document.getElementById('payment-save-notice');
+let paymentSaveNoticeVersion = 0;
+let pendingPaymentSaves = 0;
+
+const showPaymentSaveNotice = (text, type, clearAfterMs = 0) => {
+    if (!paymentSaveNotice) {
+        return;
+    }
+
+    paymentSaveNotice.style.display = 'block';
+    paymentSaveNotice.textContent = text;
+    if (type === 'error') {
+        paymentSaveNotice.style.background = '#f8d7da';
+        paymentSaveNotice.style.color = '#721c24';
+        paymentSaveNotice.style.border = '1px solid #f5c6cb';
+    } else if (type === 'success') {
+        paymentSaveNotice.style.background = '#d4edda';
+        paymentSaveNotice.style.color = '#155724';
+        paymentSaveNotice.style.border = '1px solid #c3e6cb';
+    } else {
+        paymentSaveNotice.style.background = '#d9edf7';
+        paymentSaveNotice.style.color = '#245269';
+        paymentSaveNotice.style.border = '1px solid #bce8f1';
+    }
+
+    const version = ++paymentSaveNoticeVersion;
+    if (clearAfterMs > 0) {
+        window.setTimeout(() => {
+            if (paymentSaveNoticeVersion === version) {
+                paymentSaveNotice.style.display = 'none';
+                paymentSaveNotice.textContent = '';
+            }
+        }, clearAfterMs);
+    }
+};
 
 const updatePaymentSummary = (data) => {
     const paidWeeks = document.getElementById('paid-weeks');
@@ -141,28 +203,11 @@ const updatePaymentSummary = (data) => {
 paymentForms.forEach((form) => {
     const checkbox = form.querySelector('input[name="paid"]');
     const attendanceIdInput = form.querySelector('input[name="attendance_id"]');
-    const statusEl = form.querySelector('.player-payment-status');
     if (!checkbox || !attendanceIdInput) {
         return;
     }
 
     let saving = false;
-    const setStatus = (text, color, clearAfterMs = 0) => {
-        if (!statusEl) {
-            return;
-        }
-
-        statusEl.textContent = text;
-        statusEl.style.color = color;
-        if (clearAfterMs > 0) {
-            window.setTimeout(() => {
-                if (statusEl.textContent === text) {
-                    statusEl.textContent = '';
-                }
-            }, clearAfterMs);
-        }
-    };
-
     const savePayment = async () => {
         if (saving) {
             return;
@@ -172,7 +217,8 @@ paymentForms.forEach((form) => {
         const newPaid = checkbox.checked ? '1' : '0';
         saving = true;
         checkbox.disabled = true;
-        setStatus('Saving…', '#3498db');
+        pendingPaymentSaves += 1;
+        showPaymentSaveNotice('Saving…', 'saving');
 
         try {
             const response = await fetch(form.action, {
@@ -196,10 +242,16 @@ paymentForms.forEach((form) => {
                 throw new Error(data.error || 'Save failed');
             }
             updatePaymentSummary(data);
-            setStatus('Saved', '#27ae60', 1200);
+            pendingPaymentSaves -= 1;
+            showPaymentSaveNotice(
+                pendingPaymentSaves ? 'Saving…' : 'Saved',
+                pendingPaymentSaves ? 'saving' : 'success',
+                pendingPaymentSaves ? 0 : 1200
+            );
         } catch (error) {
             checkbox.checked = previousPaid === '1';
-            setStatus('Not saved', '#e74c3c', 2500);
+            pendingPaymentSaves -= 1;
+            showPaymentSaveNotice('Not saved — please try again.', 'error', 2500);
             alert('Could not save payment update. Please try again.');
         } finally {
             saving = false;
