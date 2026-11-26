@@ -106,7 +106,9 @@ def stats_goals():
             SELECT p.id AS player_id, p.name,
                 COALESCE(t.games, 0) AS games,
                 COALESCE(t.goals_scored, 0) AS goals_scored,
-                COALESCE(t.goals_conceded, 0) AS goals_conceded
+                COALESCE(t.goals_conceded, 0) AS goals_conceded,
+                COALESCE(ROUND(t.goals_scored * 1.0 / NULLIF(t.games, 0), 2), 0.0) AS average_scored,
+                COALESCE(ROUND(t.goals_conceded * 1.0 / NULLIF(t.games, 0), 2), 0.0) AS average_conceded
             FROM players p
             LEFT JOIN goal_totals t ON t.player_id = p.id
             ORDER BY goals_scored DESC, p.name COLLATE NOCASE, p.id

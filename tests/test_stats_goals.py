@@ -77,9 +77,32 @@ class GoalStatsTests(unittest.TestCase):
         self.assertEqual(by_player[charlie]['games'], 1)
         self.assertIn(b'goals-games">Games</th>', response.data)
         self.assertIn(b'goals-games">4</td>', response.data)
-        self.assertEqual((by_player[alice]['goals_scored'], by_player[alice]['goals_conceded']), (12, 8))
-        self.assertEqual((by_player[bob]['goals_scored'], by_player[bob]['goals_conceded']), (5, 9))
-        self.assertEqual((by_player[charlie]['goals_scored'], by_player[charlie]['goals_conceded']), (5, 2))
+        self.assertEqual(
+            (by_player[alice]['goals_scored'], by_player[alice]['goals_conceded']),
+            (12, 8)
+        )
+        self.assertEqual(
+            (by_player[alice]['average_scored'], by_player[alice]['average_conceded']),
+            (3.0, 2.0)
+        )
+        self.assertEqual(
+            (by_player[bob]['goals_scored'], by_player[bob]['goals_conceded']),
+            (5, 9)
+        )
+        self.assertEqual(
+            (by_player[bob]['average_scored'], by_player[bob]['average_conceded']),
+            (1.67, 3.0)
+        )
+        self.assertEqual(
+            (by_player[charlie]['goals_scored'], by_player[charlie]['goals_conceded']),
+            (5, 2)
+        )
+        self.assertEqual(
+            (by_player[charlie]['average_scored'], by_player[charlie]['average_conceded']),
+            (5.0, 2.0)
+        )
+        self.assertIn(b'Avg scored', response.data)
+        self.assertIn(b'Avg conceded', response.data)
         self.assertEqual([row['player_id'] for row in rows], [alice, bob, charlie])
 
     def test_excludes_abandoned_incomplete_unassigned_and_invalid_teams(self):
@@ -115,7 +138,8 @@ class GoalStatsTests(unittest.TestCase):
         alice = self.add_player('Alice')
         response, rows = self.get_stats()
         self.assertEqual(rows, [{
-            'player_id': alice, 'name': 'Alice', 'games': 0, 'goals_scored': 0, 'goals_conceded': 0
+            'player_id': alice, 'name': 'Alice', 'games': 0, 'goals_scored': 0, 'goals_conceded': 0,
+            'average_scored': 0.0, 'average_conceded': 0.0
         }])
         self.assertNotIn(b'No players yet.', response.data)
 
