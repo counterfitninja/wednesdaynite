@@ -21,7 +21,10 @@
         width: 34%;
     }
     .goals-table .goals-games {
-        width: 16%;
+        width: 12%;
+    }
+    .goals-table .goals-average {
+        width: 14%;
     }
     .goals-table th[scope="row"] {
         background: transparent;
@@ -65,13 +68,15 @@
 <div class="card">
     {% if player_rows %}
     <table class="goals-table">
-        <caption>All players, most goals scored first. Games shows the number of matches included in each player's goal totals. Players without scored games have zero totals.</caption>
+        <caption>All players, most goals scored first. Averages are goals per included match. Players without scored games have zero totals and averages.</caption>
         <thead>
             <tr>
                 <th scope="col">Player</th>
                 <th scope="col" class="goals-number goals-games">Games</th>
                 <th scope="col" class="goals-number goals-scored">Goals scored</th>
+                <th scope="col" class="goals-number goals-scored goals-average">Avg scored</th>
                 <th scope="col" class="goals-number goals-conceded">Goals conceded</th>
+                <th scope="col" class="goals-number goals-conceded goals-average">Avg conceded</th>
             </tr>
         </thead>
         <tbody>
@@ -80,7 +85,9 @@
                 <th scope="row">{{ row.name|name_initial }}</th>
                 <td class="goals-number goals-games">{{ row.games }}</td>
                 <td class="goals-number goals-scored">{{ row.goals_scored }}</td>
+                <td class="goals-number goals-scored goals-average">{{ "%.2f"|format(row.average_scored) }}</td>
                 <td class="goals-number goals-conceded">{{ row.goals_conceded }}</td>
+                <td class="goals-number goals-conceded goals-average">{{ "%.2f"|format(row.average_conceded) }}</td>
             </tr>
             {% endfor %}
         </tbody>
